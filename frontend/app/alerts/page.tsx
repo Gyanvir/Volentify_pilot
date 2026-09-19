@@ -24,6 +24,11 @@ interface AlertItem {
   time: string;
   description: string;
   advisory: string;
+  mlPrediction: {
+    confidenceScore: string;
+    predictedImpact: string;
+    etaOrDuration: string;
+  };
 }
 
 const MOCK_ALERTS: AlertItem[] = [
@@ -37,6 +42,11 @@ const MOCK_ALERTS: AlertItem[] = [
     time: '10 minutes ago',
     description: 'Severe cyclonic storm approaching at 145 km/h. High tidal storm surge expected.',
     advisory: 'Evacuate to designated concrete shelters immediately. Stock 72h dry food and water.',
+    mlPrediction: {
+      confidenceScore: '94%',
+      predictedImpact: 'High structural damage & power grid failure probability.',
+      etaOrDuration: 'ETA: 14 hours to landfall',
+    }
   },
   {
     id: 'ALT-102',
@@ -48,6 +58,11 @@ const MOCK_ALERTS: AlertItem[] = [
     time: '25 minutes ago',
     description: 'Water level surpassed danger mark by 1.8 meters. 12 villages submerged.',
     advisory: 'Move to elevated ground. SDRF motorboat teams deployed for evacuation.',
+    mlPrediction: {
+      confidenceScore: '88%',
+      predictedImpact: 'Continued inundation expected across 50 sq. km area.',
+      etaOrDuration: 'Duration: Peak flooding for next 48-72h',
+    }
   },
   {
     id: 'ALT-103',
@@ -59,6 +74,11 @@ const MOCK_ALERTS: AlertItem[] = [
     time: '1 hour ago',
     description: 'Dry winds accelerating fire spread across 45 hectares of pine forest.',
     advisory: 'Air Force helicopters conducting water drop operations. Avoid mountain passes.',
+    mlPrediction: {
+      confidenceScore: '81%',
+      predictedImpact: 'Rapid spread towards northeast settlements.',
+      etaOrDuration: 'ETA: Fireline reaching outskirts in 6 hrs',
+    }
   },
   {
     id: 'ALT-104',
@@ -70,6 +90,27 @@ const MOCK_ALERTS: AlertItem[] = [
     time: '2 hours ago',
     description: 'Continuous rainfall (280mm) triggered high landslide risk along tea estate slopes.',
     advisory: 'Traffic suspended along ghat roads. Rescue teams active on site.',
+    mlPrediction: {
+      confidenceScore: '92%',
+      predictedImpact: 'High risk of secondary slope failures.',
+      etaOrDuration: 'Duration: Critical risk for next 24 hours',
+    }
+  },
+  {
+    id: 'ALT-105',
+    title: 'Extreme Heatwave Advisory',
+    category: 'Heatwave',
+    level: 'HIGH',
+    location: 'Delhi NCR & Haryana',
+    state: 'Delhi',
+    time: '3 hours ago',
+    description: 'Temperatures peaking at 47°C. IMD Red Alert issued.',
+    advisory: 'Avoid outdoor activities between 11 AM - 4 PM. Stay hydrated.',
+    mlPrediction: {
+      confidenceScore: '97%',
+      predictedImpact: 'Severe heat stress for vulnerable populations.',
+      etaOrDuration: 'Duration: Elevated temps for 4-5 days',
+    }
   },
 ];
 
@@ -170,6 +211,28 @@ export default function AlertsPage() {
               <div className="p-3 rounded-lg bg-surface-high/60 border border-surface-highest text-xs text-tactical-text space-y-1">
                 <span className="text-[10px] font-telemetry font-bold text-emergency uppercase block">PUBLIC ADVISORY:</span>
                 <p className="italic">{alert.advisory}</p>
+              </div>
+
+              {/* ML Prediction Telemetry */}
+              <div className="p-3 rounded-lg bg-surface-container border border-surface-highest/60 font-telemetry text-xs space-y-2">
+                <div className="flex items-center space-x-2 text-primary border-b border-surface-highest/60 pb-2 mb-2">
+                  <Radio className="w-3.5 h-3.5" />
+                  <span className="font-bold uppercase tracking-wide">AI SITUATION PREDICTION</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[9px] text-tactical-muted uppercase font-bold block">CONFIDENCE</span>
+                    <span className="text-emerald-400 font-bold">{alert.mlPrediction.confidenceScore}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-tactical-muted uppercase font-bold block">TIMELINE</span>
+                    <span className="text-tactical-text font-bold">{alert.mlPrediction.etaOrDuration}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[9px] text-tactical-muted uppercase font-bold block">PREDICTED IMPACT</span>
+                  <span className="text-tactical-text">{alert.mlPrediction.predictedImpact}</span>
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end">

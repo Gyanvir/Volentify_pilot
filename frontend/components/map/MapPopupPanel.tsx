@@ -79,13 +79,6 @@ export default function MapPopupPanel({ node, onClose }: MapPopupPanelProps) {
           </p>
         </div>
 
-        {node.capacity && (
-          <div className="flex items-center justify-between p-2 rounded bg-surface-high/30">
-            <span className="text-tactical-muted">Capacity / Resources:</span>
-            <span className="font-bold text-primary-tint">{node.capacity}</span>
-          </div>
-        )}
-
         {node.contact && (
           <div className="flex items-center space-x-2 text-tactical-muted">
             <Phone className="w-3.5 h-3.5 text-primary" />

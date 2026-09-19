@@ -360,7 +360,38 @@ export default function HomePage() {
 
 
       {/* ------------------------------------------------------------- */}
-      {/* SECTION 10: CALL TO ACTION                                    */}
+      {/* SECTION 10: NGO PARTNERS                                      */}
+      {/* ------------------------------------------------------------- */}
+      <section className="max-w-7xl mx-auto px-6 space-y-12 pb-20">
+        <div className="text-center max-w-2xl mx-auto space-y-3">
+          <span className="font-mono text-xs text-slate-400 uppercase tracking-widest">COLLABORATION</span>
+          <h2 className="heading-editorial text-4xl sm:text-5xl text-white">
+            Our NGO Partners
+          </h2>
+          <p className="text-sm text-slate-400 font-light">
+            Working hand-in-hand with renowned humanitarian organizations to accelerate disaster response.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center justify-items-center opacity-70 hover:opacity-100 transition-opacity duration-500">
+          <div className="font-serif text-2xl text-slate-300 font-bold tracking-tight flex items-center space-x-2">
+            <span className="text-primary">+</span> <span>Red Cross India</span>
+          </div>
+          <div className="font-serif text-2xl text-slate-300 font-bold tracking-tight flex items-center space-x-2">
+            <span className="text-primary">+</span> <span>Oxfam</span>
+          </div>
+          <div className="font-serif text-2xl text-slate-300 font-bold tracking-tight flex items-center space-x-2">
+            <span className="text-primary">+</span> <span>Save the Children</span>
+          </div>
+          <div className="font-serif text-2xl text-slate-300 font-bold tracking-tight flex items-center space-x-2">
+            <span className="text-primary">+</span> <span>Doctors W/O Borders</span>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ------------------------------------------------------------- */}
+      {/* SECTION 11: CALL TO ACTION                                    */}
       {/* ------------------------------------------------------------- */}
       <section className="max-w-7xl mx-auto px-6">
         <div className="p-16 rounded-4xl bg-gradient-to-br from-surface to-background border border-white/[0.08] text-center space-y-8 max-w-4xl mx-auto">

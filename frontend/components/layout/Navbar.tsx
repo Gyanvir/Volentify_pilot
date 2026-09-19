@@ -12,6 +12,7 @@ export default function Navbar() {
   const navLinks = [
     { href: '/', label: 'Platform' },
     { href: '/map', label: 'Map' },
+    { href: '/alerts', label: 'Alerts' },
     { href: '/disaster-intelligence', label: 'Intelligence' },
     { href: '/research', label: 'Research' },
     { href: '/about', label: 'About' },

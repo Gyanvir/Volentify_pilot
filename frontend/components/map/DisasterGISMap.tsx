@@ -38,7 +38,6 @@ export interface MapFeatureNode {
   lat: number;
   lng: number;
   details: string;
-  capacity?: string;
   contact?: string;
   status: string;
   updatedAt: string;
@@ -76,8 +75,7 @@ const MOCK_MAP_NODES: MapFeatureNode[] = [
     subType: 'Super Specialty Hospital',
     lat: 20.2285,
     lng: 85.8189,
-    details: 'Level 1 Trauma Center equipped with 200 ICU beds & emergency trauma unit.',
-    capacity: '142 Beds Available',
+    details: 'Level 1 Trauma Center equipped with ICU & emergency trauma unit.',
     contact: '+91 674 2476789',
     status: 'Operational',
     updatedAt: '2 mins ago',
@@ -90,7 +88,6 @@ const MOCK_MAP_NODES: MapFeatureNode[] = [
     lat: 20.2644,
     lng: 86.6705,
     details: 'Reinforced concrete shelter with solar power backup and medical supplies.',
-    capacity: 'Capacity: 850 / Occupancy: 320',
     contact: 'Shelter Incharge: Capt. Sharma',
     status: 'Open',
     updatedAt: '15 mins ago',
@@ -114,11 +111,46 @@ const MOCK_MAP_NODES: MapFeatureNode[] = [
     subType: 'Volentify Rapid Team',
     lat: 11.6854,
     lng: 76.132,
-    details: '120 certified Volunteers assisting local SDRF in clearing landslide debris.',
-    capacity: '120 Active Volunteers',
+    details: 'Certified Volunteers assisting local SDRF in clearing landslide debris.',
     status: 'Active Field Duty',
     updatedAt: '8 mins ago',
   },
+  {
+    id: 'node-7',
+    name: 'Delhi NCR Heatwave Core',
+    category: 'hazard',
+    subType: 'Heatwave',
+    severity: 'HIGH',
+    lat: 28.6139,
+    lng: 77.2090,
+    details: 'Temperatures peaking at 47°C. IMD Red Alert issued for consecutive days.',
+    status: 'Active Alert',
+    updatedAt: '30 mins ago',
+  },
+  {
+    id: 'node-8',
+    name: 'Uttarakhand Forest Fire',
+    category: 'hazard',
+    subType: 'Wildfire',
+    severity: 'CRITICAL',
+    lat: 30.0668,
+    lng: 79.0193,
+    details: 'Massive fire line spanning 5km in Garhwal hills. Choppers deployed.',
+    status: 'Uncontrolled',
+    updatedAt: '12 mins ago',
+  },
+  {
+    id: 'node-9',
+    name: 'Kangra Valley Seismic Event',
+    category: 'hazard',
+    subType: 'Earthquake',
+    severity: 'HIGH',
+    lat: 32.0998,
+    lng: 76.2691,
+    details: '6.2 Magnitude earthquake struck at 10km depth. Aftershocks ongoing.',
+    status: 'Post-Event Assessment',
+    updatedAt: '1 hr ago',
+  }
 ];
 
 export default function DisasterGISMap() {
@@ -147,6 +179,7 @@ export default function DisasterGISMap() {
     // Initialize MapLibre GL Canvas
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
+      attributionControl: false,
       style: {
         version: 8,
         sources: {

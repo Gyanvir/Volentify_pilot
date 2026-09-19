@@ -73,3 +73,6 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+.maplibregl-ctrl-logo { display: none !important; }
+.maplibregl-ctrl-attrib { display: none !important; }

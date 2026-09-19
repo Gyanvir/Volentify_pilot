@@ -1,5 +1,20 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from pydantic import BaseModel
+from typing import List, Dict, Any
+
+from api.models.schemas import (
+    TaskSchema, VolunteerSchema, RankedMatchSchema,
+    RawReportSchema, DeduplicatedEventSchema,
+    EvidenceSchema, SituationBriefingSchema,
+    InfraFacilitySchema
+)
+from api.data.mock_data import (
+    MOCK_TASKS, MOCK_VOLUNTEERS, MOCK_REPORTS, MOCK_EVIDENCE, FALLBACK_INFRA
+)
+from api.engines.resource_matcher import ResourceMatcher
+from api.engines.event_dedup import EventDeduplicator
+from api.engines.situation_briefing import SituationBriefingEngine
+from api.engines.infra_proximity import InfraProximityEngine
 
 app = FastAPI(
     title="Volentify Disaster Intelligence API",
@@ -85,3 +100,47 @@ def predict_hazard(data: PredictionRequestSchema):
         "predicted_surge_m": surge,
         "confidence_score": 0.948
     }
+
+# --- Feature 1: Resource Matching ---
+
+@app.get("/api/match/demo", response_model=Dict[str, List[RankedMatchSchema]])
+def match_demo():
+    # Return batch matching for all mock tasks and volunteers
+    return ResourceMatcher.batch_match(MOCK_TASKS, MOCK_VOLUNTEERS)
+
+@app.post("/api/match", response_model=List[RankedMatchSchema])
+def match_task(task: TaskSchema, volunteers: List[VolunteerSchema] = Body(default=MOCK_VOLUNTEERS)):
+    return ResourceMatcher.match_task(task, volunteers)
+
+# --- Feature 4: Event Deduplication ---
+
+@app.get("/api/events/demo", response_model=List[DeduplicatedEventSchema])
+def events_demo():
+    return EventDeduplicator.deduplicate(MOCK_REPORTS)
+
+@app.post("/api/events/ingest", response_model=List[DeduplicatedEventSchema])
+def events_ingest(reports: List[RawReportSchema]):
+    return EventDeduplicator.deduplicate(reports)
+
+# --- Feature 7: Situation Briefing ---
+
+@app.get("/api/briefing/demo", response_model=SituationBriefingSchema)
+def briefing_demo():
+    event_label = "Assam Flood"
+    location = "Guwahati"
+    return SituationBriefingEngine.generate_briefing("EVT-001", event_label, location, MOCK_EVIDENCE)
+
+@app.post("/api/briefing/generate", response_model=SituationBriefingSchema)
+def briefing_generate(event_id: str = Body(...), event_label: str = Body(...), location: str = Body(...), evidence: List[EvidenceSchema] = Body(...)):
+    return SituationBriefingEngine.generate_briefing(event_id, event_label, location, evidence)
+
+# --- Feature 11: Infrastructure Proximity ---
+
+@app.get("/api/infrastructure/demo")
+async def infrastructure_demo():
+    # Demo for Delhi coordinates
+    return await InfraProximityEngine.get_nearby_infrastructure(28.6139, 77.2090, 10.0)
+
+@app.post("/api/infrastructure/nearby")
+async def infrastructure_nearby(lat: float = Body(...), lng: float = Body(...), radius_km: float = Body(10.0)):
+    return await InfraProximityEngine.get_nearby_infrastructure(lat, lng, radius_km)
