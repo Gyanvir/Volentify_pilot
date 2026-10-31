@@ -17,7 +17,7 @@ class Converters {
 }
 
 /** SQLite via Room: survives process death and reboots (FR-03, AT-02). */
-@Database(entities = [MeshEvent::class], version = 1, exportSchema = true)
+@Database(entities = [MeshEvent::class], version = 1, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class MeshDatabase : RoomDatabase() {
     abstract fun dao(): MeshDao
