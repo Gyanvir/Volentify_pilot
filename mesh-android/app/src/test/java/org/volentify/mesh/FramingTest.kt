@@ -19,8 +19,9 @@ class FramingTest {
     }
 
     @Test fun interleavedSendersDoNotMix() {
-        val a = "first".toByteArray()
-        val b = "second message".toByteArray()
+        // 8-byte chunks at MTU 10, so both messages span several frames.
+        val a = "first message from phone A".toByteArray()
+        val b = "second, longer message from phone B".toByteArray()
         val r = Framing.Reassembler()
         val fa = Framing.split(a, 1, 10)
         val fb = Framing.split(b, 1, 10)
