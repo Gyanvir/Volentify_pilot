@@ -1,0 +1,39 @@
+name: Train cyclone models
+
+# Downloads the latest IBTrACS North Indian Ocean best tracks, retrains and evaluates the models,
+# and commits the exported models + model card to frontend/api/_lib/models (Vercel redeploys).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 21 * * 0" # weekly, Sunday night IST
+  push:
+    branches: [main]
+    paths: ["ml/volentify_ml/**", ".github/workflows/ml-train.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r ml/requirements.txt -r frontend/requirements.txt
+      - run: python -m pytest ml/tests -q
+      - name: Train on the full archive
+        working-directory: ml
+        run: python -m volentify_ml.train --download --out ../frontend/api/_lib/models
+      - name: Verify the API serves the new models
+        run: python -m pytest frontend/tests -q
+      - name: Commit models
+        run: |
+          git config user.name "volentify-ml-bot"
+          git config user.email "volentify-ml-bot@users.noreply.github.com"
+          git add frontend/api/_lib/models
+          if git diff --cached --quiet; then echo "No model changes"; exit 0; fi
+          git commit -m "Retrain cyclone models on latest IBTrACS"
+          git push

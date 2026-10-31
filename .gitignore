@@ -1,9 +1,21 @@
 node_modules/
 .next/
+out/
+*.tsbuildinfo
 
-# Python cache
+.env
+.env*.local
+.vercel
 __pycache__/
 *.pyc
+.pytest_cache/
 
-# TypeScript build cache
-*.tsbuildinfo
+# ML pipeline downloads
+ml/data/
+
+# Android
+mesh-android/.gradle/
+mesh-android/build/
+mesh-android/app/build/
+mesh-android/local.properties
+*.jks

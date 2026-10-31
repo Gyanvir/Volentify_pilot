@@ -1,0 +1,203 @@
+"""Authentication & role-adaptive onboarding (PRD §8)."""
+
+from __future__ import annotations
+
+import secrets
+from typing import Optional
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
+
+from ..core import db
+from ..core.config import get_settings
+from ..core.security import (
+    ELEVATED_ROLES, NONCE_COOKIE, ROLE_PASS, SESSION_COOKIE, RateLimiter, client_key, hash_password, issue_session,
+    muster_code, muster_signature, require_roles, require_session, session_cookie_kwargs, verify_google_id_token,
+    verify_password,
+)
+from ..schemas import (
+    AuthResponse, GoogleAuthRequest, LoginRequest, OnboardRequest, RegisterRequest, RoleUpdate, User,
+)
+from .common import new_id, now, tag
+
+router = APIRouter(prefix="/api", tags=["auth"])
+_login_limiter = RateLimiter(limit=10, window_s=60)
+STATE_COOKIE = "volentify_oauth_state"
+
+
+def to_user(row: dict) -> User:
+    muster = None
+    if row.get("muster_code") and row.get("muster_issued_at"):
+        prefix_title = ROLE_PASS[row["role"]][1]
+        muster = {"code": row["muster_code"], "title": prefix_title, "role": row["role"], "holder": row["name"],
+                  "issued_at": row["muster_issued_at"],
+                  "signature": muster_signature(row["id"], row["muster_code"], row["muster_issued_at"])}
+    return User.model_validate({**row, "profile_data": row.get("profile_data") or {}, "muster": muster})
+
+
+def needs_onboarding(row: dict) -> bool:
+    phone = row.get("phone") or ""
+    return not row.get("onboarded") or len(phone) != 10
+
+
+def _start_session(response: Response, row: dict) -> AuthResponse:
+    response.set_cookie(SESSION_COOKIE, issue_session(row), **session_cookie_kwargs())
+    return AuthResponse(user=to_user(row), requires_onboarding=needs_onboarding(row))
+
+
+def _auto_verify(email: str) -> bool:
+    settings = get_settings()
+    return email.lower() in settings.admin_emails
+
+
+def _blank_user(name: str, email: str, provider: str, **extra) -> dict:
+    ts = now()
+    admin = _auto_verify(email)
+    return {"id": new_id("usr"), "name": name, "email": email.lower(), "phone": "", "password_hash": None,
+            "role": "INCIDENT_ADMIN" if admin else "CITIZEN", "state_district": None, "lat": None, "lng": None,
+            "provider": provider, "google_id": None, "avatar_url": None, "blood_group": None,
+            "emergency_contact": None, "is_verified": admin, "onboarded": False, "org_id": None,
+            "profile_data": {}, "muster_code": None, "muster_issued_at": None, "created_at": ts, "updated_at": ts,
+            **extra}
+
+
+# ─── Google OAuth 2.0 (OpenID Connect implicit id_token flow) ───────────────
+
+@router.get("/auth/google/start", include_in_schema=False)
+def google_start(request: Request, next: str = "/dashboard"):
+    settings = get_settings()
+    if not settings.google_client_id:
+        return RedirectResponse("/login?error=google_unconfigured", status_code=302)
+    origin = settings.public_url or str(request.base_url).rstrip("/")
+    nonce, state = secrets.token_urlsafe(24), secrets.token_urlsafe(16)
+    params = {"client_id": settings.google_client_id, "redirect_uri": f"{origin}/auth/callback",
+              "response_type": "id_token", "scope": "openid email profile", "nonce": nonce,
+              "state": f"{state}.{next if next.startswith('/') else '/dashboard'}", "prompt": "select_account"}
+    resp = RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params), status_code=302)
+    cookie = {"httponly": True, "secure": settings.is_production, "samesite": "lax", "max_age": 600, "path": "/"}
+    resp.set_cookie(NONCE_COOKIE, nonce, **cookie)
+    resp.set_cookie(STATE_COOKIE, state, **cookie)
+    return resp
+
+
+@router.post("/auth/google", response_model=AuthResponse, response_model_by_alias=True)
+def google_login(body: GoogleAuthRequest, request: Request, response: Response):
+    _login_limiter.check(client_key(request))
+    expected_state = request.cookies.get(STATE_COOKIE)
+    if not body.state or not expected_state or not secrets.compare_digest(body.state.split(".")[0], expected_state):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign-in request expired — please try again")
+    claims = verify_google_id_token(body.id_token, request.cookies.get(NONCE_COOKIE))
+    google_id, email = claims["sub"], claims["email"].lower()
+
+    def upsert(store):
+        row = store.get_user_by_google(google_id) or store.get_user_by_email(email)
+        if row:
+            return store.update_user(row["id"], {"google_id": google_id, "avatar_url": claims.get("picture"),
+                                                  "provider": "google"})
+        return store.create_user(_blank_user(claims.get("name") or email.split("@")[0], email, "google",
+                                             google_id=google_id, avatar_url=claims.get("picture")))
+
+    row, source = db.write(upsert)
+    tag(response, source)
+    response.delete_cookie(NONCE_COOKIE, path="/")
+    response.delete_cookie(STATE_COOKIE, path="/")
+    return _start_session(response, row)
+
+
+# ─── Credentials ────────────────────────────────────────────────────────────
+
+@router.post("/auth/register", response_model=AuthResponse, response_model_by_alias=True,
+             status_code=status.HTTP_201_CREATED)
+def register(body: RegisterRequest, request: Request, response: Response):
+    _login_limiter.check(client_key(request))
+    user = _blank_user(body.name.strip(), body.email, "credentials", password_hash=hash_password(body.password))
+    try:
+        row, source = db.write(lambda s: s.create_user(user))
+    except ValueError:
+        raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
+    tag(response, source)
+    return _start_session(response, row)
+
+
+@router.post("/auth/login", response_model=AuthResponse, response_model_by_alias=True)
+def login(body: LoginRequest, request: Request, response: Response):
+    _login_limiter.check(client_key(request))
+    row, source = db.read(lambda s: s.get_user_by_email(body.email.strip().lower()))
+    if not row or not verify_password(body.password, row.get("password_hash")):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email or password is incorrect")
+    tag(response, source)
+    return _start_session(response, row)
+
+
+@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE, path="/")
+
+
+@router.get("/auth/me", response_model=AuthResponse, response_model_by_alias=True)
+def me(response: Response, claims: dict = Depends(require_session)):
+    row, source = db.read(lambda s: s.get_user(claims["sub"]))
+    if not row:
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
+    tag(response, source)
+    return AuthResponse(user=to_user(row), requires_onboarding=needs_onboarding(row))
+
+
+# ─── Onboarding wizard → digital muster pass ────────────────────────────────
+
+@router.post("/auth/onboard", response_model=AuthResponse, response_model_by_alias=True)
+def onboard(body: OnboardRequest, response: Response, claims: dict = Depends(require_session)):
+    settings = get_settings()
+    issued = now()
+
+    def apply(store):
+        row = store.get_user(claims["sub"])
+        if not row:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
+        elevated = body.role in ELEVATED_ROLES
+        verified = row["is_verified"] or not elevated or settings.is_local or _auto_verify(row["email"])
+        code = muster_code(row["id"], body.role)
+        updated = store.update_user(row["id"], {
+            "phone": body.phone, "role": body.role, "state_district": body.state_district,
+            "lat": body.lat, "lng": body.lng, "blood_group": body.blood_group,
+            "emergency_contact": body.emergency_contact, "profile_data": body.profile, "onboarded": True,
+            "is_verified": verified, "muster_code": code, "muster_issued_at": issued,
+        })
+        if body.role == "VOLUNTEER":
+            store.upsert_volunteer_profile(row["id"], {
+                "skills": body.skills, "equipment": body.equipment,
+                "lat": body.lat if body.lat is not None else 20.59,
+                "lng": body.lng if body.lng is not None else 78.96,
+                "location_name": body.state_district,
+            })
+        return updated
+
+    row, source = db.write(apply)
+    tag(response, source)
+    return _start_session(response, row)
+
+
+# ─── Administration ─────────────────────────────────────────────────────────
+
+@router.get("/admin/users", response_model=list[User])
+def list_users(response: Response, _: dict = Depends(require_roles("INCIDENT_ADMIN"))):
+    rows, source = db.read(lambda s: s.list_users())
+    tag(response, source)
+    return [to_user(r) for r in rows]
+
+
+@router.patch("/admin/users/{user_id}", response_model=User)
+def update_user(user_id: str, body: RoleUpdate, response: Response,
+                claims: dict = Depends(require_roles("INCIDENT_ADMIN"))):
+    if user_id == claims["sub"] and body.role != "INCIDENT_ADMIN":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot remove your own administrator role")
+    fields: dict[str, Optional[object]] = {"role": body.role}
+    if body.is_verified is not None:
+        fields["is_verified"] = body.is_verified
+    row, source = db.write(lambda s: s.update_user(user_id, fields))
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    tag(response, source)
+    return to_user(row)

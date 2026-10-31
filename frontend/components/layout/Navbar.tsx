@@ -1,106 +1,147 @@
 'use client';
 
-import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, ArrowUpRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, LogOut, Menu, Phone, X } from 'lucide-react';
+import { ROLE_META } from '@/lib/constants';
+import { useSession } from '@/lib/session';
+import { cn } from '@/lib/utils';
+import { ButtonLink } from '@/components/ui/Button';
+
+const PRIMARY = [
+  { href: '/map', label: 'Map' },
+  { href: '/disasters', label: 'Incidents' },
+  { href: '/alerts', label: 'Alerts' },
+  { href: '/volunteer', label: 'Volunteer' },
+];
+const INTELLIGENCE = [
+  { href: '/predictions', label: 'Forecasts', blurb: 'Storm-surge model and multilingual triage' },
+  { href: '/disaster-intelligence', label: 'Satellite & bulletins', blurb: 'Imagery layers and NDMA CAP feed' },
+  { href: '/analytics', label: 'Analytics', blurb: 'Operational picture across incidents' },
+];
+
+function useClickOutside(ref: React.RefObject<HTMLElement | null>, onOutside: () => void) {
+  useEffect(() => {
+    const h = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && onOutside();
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [ref, onOutside]);
+}
 
 export default function Navbar() {
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, status, signOut } = useSession();
+  const [mobile, setMobile] = useState(false);
+  const [intel, setIntel] = useState(false);
+  const [account, setAccount] = useState(false);
+  const intelRef = useRef<HTMLDivElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
+  useClickOutside(intelRef, () => setIntel(false));
+  useClickOutside(accountRef, () => setAccount(false));
+  useEffect(() => { setMobile(false); setIntel(false); setAccount(false); }, [pathname]);
 
-  const navLinks = [
-    { href: '/', label: 'Platform' },
-    { href: '/map', label: 'Map' },
-    { href: '/alerts', label: 'Alerts' },
-    { href: '/disaster-intelligence', label: 'Intelligence' },
-    { href: '/research', label: 'Research' },
-    { href: '/about', label: 'About' },
-    { href: '/resources', label: 'Resources' },
-  ];
+  const active = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const consoleLinks = user ? [
+    { href: '/dashboard', label: 'My dashboard' },
+    ...(['INCIDENT_ADMIN', 'NGO_MEMBER'].includes(user.role) ? [{ href: '/agency', label: 'Command hub' }] : []),
+    ...(user.role === 'INCIDENT_ADMIN' ? [{ href: '/admin', label: 'Administration' }] : []),
+  ] : [];
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-xl border-b border-white/[0.05]">
-      <div className="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
-        
-        {/* Brand Name - Volentify (Never write 2.0 inside logo) */}
-        <Link href="/" className="group">
-          <span className="font-serif text-2xl tracking-tight text-white group-hover:opacity-90 transition-opacity">
-            Volentify
-          </span>
+    <header className="sticky top-0 z-50 border-b border-line bg-ink/85 backdrop-blur-xl">
+      <div className="page flex h-16 items-center justify-between gap-6">
+        <Link href="/" className="font-serif text-[1.65rem] leading-none text-ivory" aria-label="Volentify home">
+          Volentify
         </Link>
 
-        {/* Clean Nav Links */}
-        <nav className="hidden lg:flex items-center space-x-8">
-          {navLinks.map((link) => {
-            const isActive = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`text-sm tracking-tight transition-colors ${
-                  isActive ? 'text-white font-medium' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Actions */}
-        <div className="hidden sm:flex items-center space-x-6">
-          <Link
-            href="/volunteer"
-            className="text-xs font-medium text-slate-300 hover:text-white transition-colors"
-          >
-            Volunteer
-          </Link>
-          <Link
-            href="/login"
-            className="text-xs font-medium text-slate-300 hover:text-white transition-colors"
-          >
-            Login
-          </Link>
-          <Link
-            href="/map"
-            className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors flex items-center space-x-1"
-          >
-            <span>Explore Map</span>
-            <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
-          </Link>
-        </div>
-
-        {/* Mobile Toggle */}
-        <div className="flex lg:hidden">
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-slate-400 hover:text-white"
-          >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-
-      </div>
-
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden bg-background border-b border-white/[0.05] px-8 py-6 space-y-4">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="block text-base text-slate-300 hover:text-white"
-            >
-              {link.label}
+        <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
+          {PRIMARY.map((l) => (
+            <Link key={l.href} href={l.href} aria-current={active(l.href) ? 'page' : undefined}
+              className={cn('rounded-lg px-3 py-2 text-sm transition-colors', active(l.href) ? 'text-ivory' : 'text-stone hover:text-ivory')}>
+              {l.label}
             </Link>
           ))}
-          <div className="pt-4 border-t border-white/[0.05] flex flex-col space-y-3">
-            <Link href="/volunteer" className="text-sm text-slate-300">Volunteer</Link>
-            <Link href="/login" className="text-sm text-slate-300">Login</Link>
+          <div ref={intelRef} className="relative">
+            <button onClick={() => setIntel((v) => !v)} aria-expanded={intel}
+              className={cn('flex items-center gap-1 rounded-lg px-3 py-2 text-sm transition-colors',
+                INTELLIGENCE.some((l) => active(l.href)) ? 'text-ivory' : 'text-stone hover:text-ivory')}>
+              Intelligence <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', intel && 'rotate-180')} aria-hidden />
+            </button>
+            {intel && (
+              <div className="absolute left-0 top-full mt-2 w-72 animate-fade-up rounded-2xl border border-line bg-ink-900 p-2 shadow-float">
+                {INTELLIGENCE.map((l) => (
+                  <Link key={l.href} href={l.href} className="block rounded-xl px-3 py-2.5 hover:bg-ivory/[0.05]">
+                    <span className="block text-sm text-ivory">{l.label}</span>
+                    <span className="block text-xs text-stone">{l.blurb}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
+          <Link href="/resources" className={cn('rounded-lg px-3 py-2 text-sm transition-colors', active('/resources') ? 'text-ivory' : 'text-stone hover:text-ivory')}>
+            Resources
+          </Link>
+        </nav>
+
+        <div className="flex items-center gap-2">
+          <a href="tel:112" className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] text-critical ring-1 ring-inset ring-critical/30 transition-colors hover:bg-critical/10 sm:flex">
+            <Phone className="h-3.5 w-3.5" aria-hidden /> Emergency 112
+          </a>
+          {status === 'authenticated' && user ? (
+            <div ref={accountRef} className="relative hidden sm:block">
+              <button onClick={() => setAccount((v) => !v)} aria-expanded={account}
+                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 ring-1 ring-inset ring-line-strong hover:ring-ivory/30">
+                {user.avatar_url
+                  ? <img src={user.avatar_url} alt="" className="h-7 w-7 rounded-full" referrerPolicy="no-referrer" />
+                  : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold/15 font-serif text-sm text-gold">{user.name[0]}</span>}
+                <span className="max-w-[9rem] truncate text-[0.8125rem] text-ivory">{user.name.split(' ')[0]}</span>
+              </button>
+              {account && (
+                <div className="absolute right-0 top-full mt-2 w-64 animate-fade-up rounded-2xl border border-line bg-ink-900 p-2 shadow-float">
+                  <div className="px-3 py-2">
+                    <p className="truncate text-sm text-ivory">{user.name}</p>
+                    <p className="text-xs text-stone">{ROLE_META[user.role].label}{user.is_verified ? '' : ' · awaiting verification'}</p>
+                  </div>
+                  <div className="my-1 border-t border-line" />
+                  {consoleLinks.map((l) => (
+                    <Link key={l.href} href={l.href} className="block rounded-lg px-3 py-2 text-sm text-sand hover:bg-ivory/[0.05] hover:text-ivory">{l.label}</Link>
+                  ))}
+                  <button onClick={signOut} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sand hover:bg-ivory/[0.05] hover:text-ivory">
+                    <LogOut className="h-3.5 w-3.5" aria-hidden /> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : status === 'anonymous' ? (
+            <div className="hidden items-center gap-1 sm:flex">
+              <ButtonLink href="/login" variant="ghost" size="sm">Sign in</ButtonLink>
+              <ButtonLink href="/register" variant="quiet" size="sm">Join</ButtonLink>
+            </div>
+          ) : <span className="hidden w-24 sm:block" />}
+          <button className="rounded-lg p-2 text-sand hover:text-ivory lg:hidden" onClick={() => setMobile((v) => !v)}
+            aria-label={mobile ? 'Close menu' : 'Open menu'} aria-expanded={mobile}>
+            {mobile ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
+      </div>
+
+      {mobile && (
+        <nav className="border-t border-line bg-ink lg:hidden" aria-label="Mobile">
+          <div className="page grid gap-1 py-4">
+            {[...PRIMARY, ...INTELLIGENCE, { href: '/resources', label: 'Resources' }, ...consoleLinks].map((l) => (
+              <Link key={l.href} href={l.href} className={cn('rounded-lg px-3 py-2.5 text-[0.9375rem]', active(l.href) ? 'bg-ivory/[0.06] text-ivory' : 'text-sand')}>
+                {l.label}
+              </Link>
+            ))}
+            <div className="mt-3 flex gap-2 border-t border-line pt-4">
+              <ButtonLink href="tel:112" variant="danger" size="sm"><Phone className="h-3.5 w-3.5" />Call 112</ButtonLink>
+              {user
+                ? <button onClick={signOut} className="ml-auto text-sm text-stone">Sign out</button>
+                : <><ButtonLink href="/login" variant="secondary" size="sm">Sign in</ButtonLink><ButtonLink href="/register" variant="quiet" size="sm">Join</ButtonLink></>}
+            </div>
+          </div>
+        </nav>
       )}
     </header>
   );

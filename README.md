@@ -1,106 +1,152 @@
-# Volentify — India's Disaster Intelligence & Volunteer Response Platform
+# Volentify
 
-**Volentify** is the digital identity and crisis response platform for India's premier humanitarian technology organization. It unifies real-time GIS telemetry, satellite observation, machine learning hazard forecasting, and rapid volunteer dispatch into an elegant, restrained web experience inspired by Apple, Stripe, Linear, Vercel, and NASA Earth.
+Disaster intelligence, offline mesh coordination and volunteer dispatch for India.
 
----
+Volentify gives incident commanders, NGOs, volunteers and citizens one shared picture of an
+emergency: a 2D/3D tactical map, field reports that survive network collapse through the
+Volentify Mesh companion app, multilingual triage, storm-surge forecasting and a dispatch engine
+that matches the right responder to the right mission without wasting scarce specialists.
 
-## 🌐 Live Platform Overview & Current Features (26 Routes)
+The full product specification is in [`docs/PRD.md`](docs/PRD.md); the design system is in
+[`docs/DESIGN.md`](docs/DESIGN.md).
 
-The platform is fully built using **Next.js 15 (App Router)**, **TypeScript**, **Tailwind CSS**, **Three.js**, **MapLibre GL**, and **FastAPI Python Serverless (Vercel)**.
+## Repository layout
 
-### Deployed Pages & Modules
-1. **10-Section Editorial Homepage (`/`)**:
-   - Ambient 3D Particle Earth Globe backdrop (*Stripe/GitHub style*).
-   - Display typography in `Instrument Serif` (*"Intelligence for every disaster. Humanity for every response."*).
-   - Live National GIS Telemetry canvas.
-   - Purpose & Mission section with documentary humanitarian photography.
-   - Apple-style alternating feature breakdown (Satellite Engine, Volunteer Dispatch).
-   - Machine Learning 48-hour forecasting overview.
-   - Ground volunteer corps stories (Search & Rescue, Medical Camps, Food Logistics).
-   - 3-step Agency & NDRF coordination workflow.
-   - Minimal restrained statistics.
-   - Peer-reviewed open science research section (IEEE Disaster GIS 2026).
-   - High-impact humanitarian Call-to-Action.
-2. **Live GIS Map Platform (`/map`)**:
-   - Full-viewport MapLibre GL GIS canvas with CartoDB dark tiles.
-   - 7 Layer Toggles: Satellite, Doppler Weather Radar, Cyclone Track, Flood Inundation, Hospitals, Relief Shelters, Volunteer Teams.
-   - Interactive Time Slider (-24h Past -> LIVE -> +48h Forecast).
-   - GIS Search, Distance Measurement, PDF/PNG Map Frame Exporter.
-   - Slide-out tactical node telemetry drawer for clicked hazards, hospitals, and shelters.
-3. **Disaster Details View (`/disasters/[id]`)**:
-   - Severity risk score meter (e.g. 9.4/10), official NDMA/IMD situation report, chronological incident timeline, affected districts grid, nearby hospitals with ICU bed counts, and rapid volunteer request trigger.
-4. **Active Alerts System (`/alerts`)**:
-   - Category filters (Cyclone, Flood, Wildfire, Landslide), emergency advisories, and interactive Emergency Broadcast Dispatch form.
-5. **Disaster Intelligence (`/disaster-intelligence`)**:
-   - Multi-spectral INSAT-3DR telemetry, Sentinel-2 thermal infrared fire hotspots, CWC river basin hydrograph monitoring.
-6. **ML Hazard Risk Predictions (`/predictions`)**:
-   - XGBoost storm surge probability forecasting (94.8% confidence) and DistilBERT NLP situation classifier (98.1% precision).
-7. **Historical Analytics Dashboard (`/analytics`)**:
-   - Recharts annual disaster frequency (2020–2025), category pie distribution, and average dispatch speed metrics (22 mins avg).
-8. **Volunteer Portal (`/volunteer`)**:
-   - Skill registration form (Rescue, Medical, Logistics, Transport, Blood), active field dispatch board, and verification badge system.
-9. **Agency Command Portal (`/agency`)**:
-   - NDRF/SDRF shelter manager, broadcast trigger console, and volunteer requisition tools.
-10. **Emergency Resources Directory (`/resources`)**:
-    - Searchable hospital ICU beds, cyclone relief shelter occupancy, and national emergency hotline numbers (112, 011-24363260, 108).
-11. **Knowledge Centre (`/knowledge`)**: Preparedness guidelines for cyclones, floods, and forest fires.
-12. **News & Situation Reports (`/news`)**: Official NDMA bulletins and press releases.
-13. **NGO Partners Directory (`/ngo-partners`)**: Indian Red Cross, Goonj, Oxfam directory.
-14. **Government Agencies (`/government`)**: NDMA, IMD, INCOIS, NDRF, SDRF directory.
-15. **About (`/about`)**, **Research (`/research`)**, **Contact (`/contact`)**, **FAQs (`/faqs`)**, **Privacy (`/privacy`)**, **Terms (`/terms`)**.
-16. **Authentication & Dashboards**: Login (`/login`), Register (`/register`), User Profile Dashboard (`/dashboard`), Admin Command Panel (`/admin`).
-17. **Integrated Vercel FastAPI Backend (`frontend/api/index.py`)**: Python serverless endpoints for `/api/health`, `/api/disasters`, `/api/predict`.
+```
+Volentify/
+├── README.md
+├── docs/
+│   ├── PRD.md                    Product requirements (v3.5)
+│   ├── DESIGN.md                 Design system: tokens, type, map language, components
+│   └── design/references/        Earlier Stitch design explorations (reference only)
+├── .github/workflows/            CI, APK build & release, weekly model training
+├── ml/                           Cyclone model pipeline (IBTrACS → features → XGBoost → API)
+├── mesh-android/                 Volentify Mesh: Android BLE store-and-forward relay app
+└── frontend/                     The deployable web app (Vercel root directory)
+    ├── app/                      Next.js 15 App Router
+    │   ├── layout.tsx            Fonts, session, toasts, navigation
+    │   ├── map/                  Full-screen tactical map (no footer)
+    │   └── (site)/               Every other route, grouped by purpose:
+    │       ├── page.tsx          Home
+    │       ├── (operations)/     disasters, disasters/[id], alerts, volunteer, resources, predictions
+    │       ├── (intelligence)/   disaster-intelligence, analytics
+    │       ├── (account)/        login, register, onboarding, auth/callback
+    │       ├── (console)/        dashboard, agency, admin
+    │       └── (about)/          about, research, faqs, news, ngo-partners, government,
+    │                             contact, knowledge, privacy, terms
+    ├── components/
+    │   ├── ui/                   Design-system primitives
+    │   ├── layout/               Navbar, footer
+    │   ├── map/                  Tactical map, detail drawer, God's Eye HUD
+    │   └── …                     Feature components (auth, globe, operations, home)
+    ├── lib/                      API client, session, types, constants, utilities
+    ├── middleware.ts             Role-based route protection (SEC-03)
+    ├── prisma/schema.prisma      Database schema (PostgreSQL / Supabase)
+    ├── api/                      FastAPI backend (Vercel Python function)
+    │   ├── index.py              App entry point and /api/health
+    │   └── _lib/
+    │       ├── core/             config, database (Postgres + fallback), security
+    │       ├── engines/          dispatch, triage, surge, dedup, briefing, intel, gemini, geo
+    │       ├── routers/          auth, entities, mesh, intelligence
+    │       ├── data/             fallback dataset and seed script
+    │       ├── models/           trained models + model card, written by the ML workflow
+    │       └── schemas.py        Request/response contracts
+    └── tests/                    API acceptance tests (PRD §14)
+```
 
----
+## Running locally
 
-## ⚡ What is Working
+Requirements: Node 20+, Python 3.12+.
 
-- ✅ **Next.js 15 App Router Build**: All 26 static/dynamic routes compile with zero TypeScript errors.
-- ✅ **Editorial Typography**: `Instrument Serif` for headlines, `Inter` for body paragraphs, and `IBM Plex Mono` for coordinates/telemetry.
-- ✅ **Ambient 3D Particle Earth Globe**: Three.js WebGL canvas rendering 2,400 particle coordinate points forming continent shapes, cyan atmosphere glow, directional lighting, and smooth rotation.
-- ✅ **MapLibre GL GIS Engine**: Layer selection state, timeline slider playback, map marker popups, distance measurement UI state.
-- ✅ **Vercel Serverless FastAPI Endpoints**: Python backend endpoints running seamlessly on Vercel at `/api/*`.
-- ✅ **Hydration & Responsiveness**: 100% hydration-safe (using `suppressHydrationWarning` & `dynamic(..., { ssr: false })`) with full mobile/desktop responsive layouts.
-
----
-
-## 📌 What is Currently Hardcoded / Mocked
-
-For demonstration and prototype presentation, the following elements use static/mock data:
-
-| Feature | Current Hardcoded State | Production Source (Future) |
-| :--- | :--- | :--- |
-| **Disaster Hotspots** | Mock coordinates for Cyclone Remal (Puri), Brahmaputra Flood (Guwahati), Wayanad Landslide (Kerala), Chamoli Fire. | Live IMD / CWC Open Data APIs |
-| **Telemetry Counters** | Hardcoded constants (12,480 Volunteers, 482 Shelters, 720 Districts, 14 Active Alerts). | MongoDB Atlas Live Aggregation |
-| **ML Model Inference** | `/api/predict` uses a mathematical formula simulating XGBoost probability scores. | Deployed `.joblib` / PyTorch Model Weights |
-| **Emergency Broadcasts** | Form submissions trigger interactive UI toasts/alerts. | Twilio SMS & WhatsApp API payloads |
-| **User Authentication** | Form accepts credentials and redirects to dashboard without JWT tokens. | NextAuth.js / JWT Auth with MongoDB |
-| **GIS Raster Overlays** | Uses CartoDB dark basemap tiles with custom Canvas GeoJSON polygons. | Real INSAT-3DR / Sentinel WMS Tiles |
-
----
-
-## 🔮 Future Additions in the Pipeline
-
-1. **Twilio SMS & WhatsApp Gateway Integration**: Real-time geofenced SMS emergency broadcast dispatching to registered citizens and volunteers.
-2. **IMD & CWC Live Data Pipeline**: Automatic ingestion of live India Meteorological Department Doppler radar feeds and Central Water Commission river level sensors.
-3. **MongoDB Atlas & Motor Async Driver**: Live database persistence for volunteer registrations, agency approvals, and shelter occupancy tracking.
-4. **Dedicated GPU Container for ML Models**: Hosting trained Scikit-learn, XGBoost, and HuggingFace Transformers NLP models on Railway/AWS.
-5. **WebSocket Live GPS Tracking**: Real-time 24/7 tracking of active volunteer positions on the MapLibre GIS canvas.
-
----
-
-## 🚀 How to Run & Deploy
-
-### Local Development
 ```bash
 cd frontend
 npm install
-npm run dev
+pip install -r requirements.txt      # add pytest to run the tests
+cp .env.example .env                 # optional — everything works without it
+npm run dev                          # Next.js on :3000 and FastAPI on :8000 together
 ```
-Open **http://localhost:3000** in your browser.
 
-### 1-Click Vercel Deployment
-1. Push repository to GitHub.
-2. Import project on **[Vercel Dashboard](https://vercel.com/new)**.
-3. Set **Root Directory** to `frontend`.
-4. Click **Deploy**! Vercel will build both Next.js 15 pages and FastAPI Python serverless functions (`api/index.py`) automatically.
+Open http://localhost:3000. API docs are at http://localhost:3000/api/docs.
+
+Without `DATABASE_URL` the API serves its built-in tactical dataset and keeps new writes in memory;
+every screen shows a "Demo dataset" marker so this is never mistaken for live data. In local
+development, NGO and command roles are verified automatically so every console can be explored.
+
+### Connecting a database
+
+Any PostgreSQL 15+ works — Neon (from Vercel → Storage), Supabase, or local Postgres.
+
+1. Set `DATABASE_URL` (the pooled connection string).
+2. That's it: on first connection to an empty database the API creates the schema
+   (`api/_lib/data/schema.sql`, equivalent to `prisma/schema.prisma`) and loads the starting dataset.
+   `npm run db:seed` does the same from your machine; `npm run db:push` is the Prisma route.
+3. Set `NEXTAUTH_SECRET` and, for your own account, `VOLENTIFY_ADMIN_EMAILS`.
+
+### Google sign-in
+
+Create an OAuth client (Web) in Google Cloud Console, add `{NEXTAUTH_URL}/auth/callback` as an
+authorised redirect URI and set `GOOGLE_CLIENT_ID`. The ID token is verified server-side against
+Google's signing keys, audience, issuer and a one-time nonce.
+
+## Deploying to Vercel
+
+1. Import the repository and set **Root Directory** to `frontend`.
+2. Storage → Create Database → Neon (Postgres), connected to the project. This adds `DATABASE_URL`.
+3. Add `NEXTAUTH_SECRET` (any long random string), `NEXTAUTH_URL` (your site address) and
+   `VOLENTIFY_ADMIN_EMAILS`. Optional: `GOOGLE_CLIENT_ID`, `GEMINI_API_KEY`.
+4. Deploy. Next.js pages and the Python API (`api/index.py`, routed by `vercel.json`) deploy together,
+   and the first API request initialises the database.
+
+## What is implemented
+
+| Area | Status |
+| :-- | :-- |
+| Mesh ingest & read APIs (FR-05…FR-16) | Bearer-token gateways, 100-event / 4 KB validation, idempotent upsert, node liveness, redaction of sensitive reports for unverified readers, review & promotion to missions. Ingest returns **503** instead of a volatile acknowledgement when the database is down, so phones keep their outbox. |
+| Sperling dispatch | Lexicographic greedy allocation with urgency weights, skill scarcity, adjacency, the 0.12 squander penalty, distance decay and fatigue; specialist missions never fall back to untrained responders. |
+| Laya triage | Three tiers: local `laya` package → hosted Impossibl endpoint → deterministic multilingual lexicon (English, Hindi, Marathi, Bengali, Assamese, Odia, Tamil, Telugu, Malayalam). |
+| Cyclone forecasting | XGBoost models trained on NOAA IBTrACS North Indian Ocean best tracks (1980 onward, IMD winds preferred): 24-hour intensity change and the probability of reaching severe cyclonic storm strength. Evaluated on held-out storms against persistence and climatology; metrics shown on `/predictions`. Served with a dependency-free tree evaluator, so the API stays small. |
+| Storm surge | Calibrated physical estimator (inverse barometer, saturating wind set-up, coastline distance decay) driven by the forecast peak wind — there is no open surge-observation archive for India to train on. |
+| Dedup & briefing | Spatio-temporal clustering (15 km / 2 h) and corroboration analysis; Gemini merges facts and writes the 150-word briefing when `GEMINI_API_KEY` is set. |
+| Auth | Credentials (scrypt) and Google OAuth, signed HTTP-only session, compulsory 5-step onboarding, signed digital muster passes, verification for NGO/command roles. |
+| Map | MapLibre with CARTO Dark Matter, imagery base maps (Esri, NASA GIBS daily), live precipitation radar, 3D terrain with hillshade, God's Eye orbital HUD, filters, measuring, PNG export. |
+
+## Volentify Mesh (Android)
+
+`mesh-android/` is the offline companion app: Kotlin, Jetpack Compose, Room and WorkManager.
+
+- Every phone advertises and scans for the Volentify BLE service and acts as both GATT server and
+  client. Envelopes are framed to fit any MTU, validated, deduplicated by `eventId`, stored with
+  `hopCount + 1` / `ttl − 1` and relayed onward while `ttl > 0`.
+- Reports live in SQLite, so they survive the app closing and the phone restarting. Each shows
+  Saved locally → Relayed → Syncing → Server-confirmed (or Failed).
+- Any phone with internet uploads its outbox to `/api/mesh/ingest` in batches of 100 using a
+  gateway token from the web dashboard, retrying with exponential backoff until acknowledged.
+- Node IDs are random UUIDs, never hardware addresses; locations can be masked by ±500 m.
+
+The **Volentify Mesh APK** workflow builds and tests the app and publishes `volentify-mesh.apk`
+as a GitHub release. Set `NEXT_PUBLIC_MESH_APK_URL` to
+`https://github.com/<owner>/<repo>/releases/latest/download/volentify-mesh.apk` and the website
+shows a download link. To build locally, open `mesh-android/` in Android Studio.
+
+## ML pipeline
+
+```bash
+cd ml
+pip install -r requirements.txt
+python -m volentify_ml.train --download     # fetch IBTrACS, evaluate, export to frontend/api/_lib/models
+```
+
+The **Train cyclone models** workflow runs this weekly and commits the refreshed models.
+
+## Tests
+
+```bash
+cd frontend
+npm test          # API acceptance tests
+cd ../ml && python -m pytest tests -q   # pipeline tests, incl. tree-evaluator parity with XGBoost
+npm run typecheck
+```
+
+## Licence
+
+MIT

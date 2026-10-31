@@ -1,0 +1,295 @@
+// Volentify data model (PRD §9.2).
+// Apply with: npm run db:push   ·   Seed with: npm run db:seed
+//
+// Additions to the PRD schema, all required by shipped features:
+//   users.password_hash          scrypt hash for credential sign-in (was an unmapped camelCase column)
+//   users.profile_data           role-specific onboarding telemetry (household, quotas, agency details)
+//   users.muster_code/_issued_at digital muster pass issued at onboarding
+//   mesh_events.review_status    FR-16 operator review, OD-07 dashed rendering until reviewed
+//   mesh_events.promoted_task_id mission created when a report is promoted
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CITIZEN
+  VOLUNTEER
+  NGO_MEMBER
+  RESEARCHER
+  INCIDENT_ADMIN
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MODERATE
+  LOW
+}
+
+enum TaskStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum SourceType {
+  OFFICIAL
+  NEWS
+  SOCIAL
+  SENSOR
+  CITIZEN
+}
+
+enum MeshEventType {
+  PERSON_RESCUED
+  PERSON_MISSING
+  PERSON_TRAPPED
+  MEDICAL_EMERGENCY
+  FIRE
+  FLOOD
+  RESOURCE_REQUEST
+  VOLUNTEER_STATUS
+  DISASTER_STATUS
+}
+
+enum MeshPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReviewStatus {
+  UNREVIEWED
+  REVIEWED
+  PROMOTED
+}
+
+model User {
+  id               String            @id @default(cuid())
+  name             String
+  email            String            @unique
+  phone            String            @default("") // 10-digit mobile, mandatory after onboarding
+  passwordHash     String?           @map("password_hash")
+  role             Role              @default(CITIZEN)
+  stateDistrict    String?           @map("state_district")
+  lat              Float?
+  lng              Float?
+  provider         String            @default("credentials")
+  googleId         String?           @unique @map("google_id")
+  avatarUrl        String?           @map("avatar_url")
+  bloodGroup       String?           @map("blood_group")
+  emergencyContact String?           @map("emergency_contact")
+  isVerified       Boolean           @default(false) @map("is_verified")
+  onboarded        Boolean           @default(false)
+  profileData      Json              @default("{}") @map("profile_data")
+  musterCode       String?           @map("muster_code")
+  musterIssuedAt   DateTime?         @map("muster_issued_at")
+  orgId            String?           @map("org_id")
+  organization     Organization?     @relation(fields: [orgId], references: [id])
+  volunteerProfile VolunteerProfile?
+  createdTasks     Task[]            @relation("CreatedTasks")
+  assignedTasks    Task[]            @relation("AssignedTasks")
+  evidenceAuthored Evidence[]
+  alertsSent       Alert[]
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  @@index([role])
+  @@index([email])
+  @@index([phone])
+  @@map("users")
+}
+
+model VolunteerProfile {
+  id           String     @id @default(cuid())
+  userId       String     @unique @map("user_id")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills       String[]
+  currentLat   Float      @map("current_lat")
+  currentLng   Float      @map("current_lng")
+  locationName String     @default("Field Location") @map("location_name")
+  availability String     @default("AVAILABLE")
+  missionsDone Int        @default(0) @map("missions_done")
+  totalHours   Float      @default(0.0) @map("total_hours")
+  equipment    String[]   @default([])
+  badgeLevel   String     @default("Tier-1 Field Responder") @map("badge_level")
+  responseRate Float      @default(98.0) @map("response_rate")
+  meshNodes    MeshNode[]
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
+
+  @@index([availability])
+  @@map("volunteer_profiles")
+}
+
+model Organization {
+  id             String     @id @default(cuid())
+  name           String     @unique
+  category       String // NDRF, SDRF, RED_CROSS, LOCAL_NGO, CIVIL_DEFENSE
+  state          String
+  district       String
+  contactEmail   String     @map("contact_email")
+  contactPhone   String     @map("contact_phone")
+  registrationNo String?    @map("registration_no")
+  verified       Boolean    @default(true)
+  users          User[]
+  disasters      Disaster[]
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  @@map("organizations")
+}
+
+model Disaster {
+  id             String        @id @default(cuid())
+  code           String        @unique
+  title          String
+  category       String
+  severity       Severity      @default(HIGH)
+  lat            Float
+  lng            Float
+  location       String
+  state          String
+  radiusKm       Float         @default(25.0) @map("radius_km")
+  polygonGeoJson String?       @map("polygon_geojson")
+  status         String        @default("ACTIVE")
+  affectedPop    String?       @map("affected_pop")
+  summary        String
+  windSpeedKmh   Float?        @map("wind_speed_kmh")
+  rainfallMm     Float?        @map("rainfall_mm")
+  surgeMeters    Float?        @map("surge_meters")
+  orgId          String?       @map("org_id")
+  organization   Organization? @relation(fields: [orgId], references: [id])
+  tasks          Task[]
+  evidence       Evidence[]
+  alerts         Alert[]
+  meshEvents     MeshEvent[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
+
+  @@index([severity])
+  @@index([category])
+  @@index([state])
+  @@map("disasters")
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  code           String     @unique
+  title          String
+  description    String?
+  urgency        Severity   @default(HIGH)
+  requiredSkill  String     @map("required_skill")
+  lat            Float
+  lng            Float
+  locationName   String     @default("Incident Site") @map("location_name")
+  quantityNeeded Int        @default(1) @map("quantity_needed")
+  status         TaskStatus @default(OPEN)
+  disasterId     String     @map("disaster_id")
+  disaster       Disaster   @relation(fields: [disasterId], references: [id], onDelete: Cascade)
+  createdById    String     @map("created_by_id")
+  createdBy      User       @relation("CreatedTasks", fields: [createdById], references: [id])
+  assignedToId   String?    @map("assigned_to_id")
+  assignedTo     User?      @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  meshEvents     MeshEvent[]
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at")
+
+  @@index([urgency])
+  @@index([status])
+  @@index([requiredSkill])
+  @@map("tasks")
+}
+
+model Evidence {
+  id         String     @id @default(cuid())
+  disasterId String     @map("disaster_id")
+  disaster   Disaster   @relation(fields: [disasterId], references: [id], onDelete: Cascade)
+  authorId   String?    @map("author_id")
+  author     User?      @relation(fields: [authorId], references: [id])
+  source     String
+  sourceType SourceType @default(OFFICIAL) @map("source_type")
+  claimText  String     @map("claim_text")
+  relation   String     @default("SUPPORTING")
+  confidence Float      @default(0.92)
+  language   String     @default("en")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@index([sourceType])
+  @@index([relation])
+  @@map("evidence")
+}
+
+model Alert {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  title       String
+  category    String
+  level       Severity  @default(CRITICAL)
+  location    String
+  state       String
+  description String
+  advisory    String
+  disasterId  String?   @map("disaster_id")
+  disaster    Disaster? @relation(fields: [disasterId], references: [id])
+  senderId    String?   @map("sender_id")
+  sender      User?     @relation(fields: [senderId], references: [id])
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([level])
+  @@index([state])
+  @@map("alerts")
+}
+
+model MeshNode {
+  id           String            @id @default(uuid())
+  nodeUuid     String            @unique @map("node_uuid")
+  volunteerId  String?           @map("volunteer_id")
+  volunteer    VolunteerProfile? @relation(fields: [volunteerId], references: [id])
+  lastLat      Float?            @map("last_lat")
+  lastLng      Float?            @map("last_lng")
+  batteryLevel Float?            @map("battery_level")
+  lastSeenAt   DateTime          @default(now()) @map("last_seen_at")
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  eventsOriginated MeshEvent[] @relation("NodeOriginatedEvents")
+
+  @@index([lastSeenAt])
+  @@map("mesh_nodes")
+}
+
+model MeshEvent {
+  id             String        @id @default(cuid())
+  eventId        String        @unique @map("event_id")
+  originNodeId   String        @map("origin_node_id")
+  originNode     MeshNode      @relation("NodeOriginatedEvents", fields: [originNodeId], references: [nodeUuid])
+  disasterId     String?       @map("disaster_id")
+  disaster       Disaster?     @relation(fields: [disasterId], references: [id])
+  type           MeshEventType
+  priority       MeshPriority  @default(MEDIUM)
+  payload        Json
+  lat            Float?
+  lng            Float?
+  observedAt     DateTime      @map("observed_at")
+  hopCount       Int           @default(0) @map("hop_count")
+  ttl            Int           @default(5)
+  receivedAt     DateTime      @default(now()) @map("received_at")
+  reviewStatus   ReviewStatus  @default(UNREVIEWED) @map("review_status")
+  promotedTaskId String?       @map("promoted_task_id")
+  promotedTask   Task?         @relation(fields: [promotedTaskId], references: [id])
+
+  @@index([type])
+  @@index([priority])
+  @@index([observedAt])
+  @@index([disasterId])
+  @@map("mesh_events")
+}
