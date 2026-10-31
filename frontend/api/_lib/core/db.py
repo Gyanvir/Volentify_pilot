@@ -237,7 +237,18 @@ class MemoryStore:
 # ─── PostgreSQL store ───────────────────────────────────────────────────────
 
 def _clean_dsn(url: str) -> str:
-    """psycopg rejects Prisma-only query params such as ?pgbouncer=true."""
+    """Normalise a connection URL for libpq.
+
+    * drops Prisma-only query params such as ?pgbouncer=true
+    * percent-encodes the password, so passwords containing @ : / [ ] work even when pasted raw
+    """
+    import re
+    from urllib.parse import quote, unquote
+
+    m = re.match(r"^(postgres(?:ql)?://)([^:/@]+):(.*)@([^@/]+)(/.*)?$", url.strip())
+    if m:
+        scheme, user, password, host, rest = m.groups()
+        url = f"{scheme}{user}:{quote(unquote(password), safe='')}@{host}{rest or ''}"
     parts = urlsplit(url)
     query = [(k, v) for k, v in parse_qsl(parts.query) if k not in {"pgbouncer", "connection_limit", "schema"}]
     return urlunsplit(parts._replace(query=urlencode(query)))
@@ -525,7 +536,20 @@ def bootstrap(store: PostgresStore) -> bool:
 
 def _mark_down(exc: Exception) -> None:
     _state["down_until"] = time.monotonic() + _RETRY_AFTER_S
-    _state["last_error"] = type(exc).__name__
+    _state["last_error"] = describe_error(exc)
+
+
+def describe_error(exc: Exception) -> str:
+    """Operator-safe summary of a connection failure: first line, credentials stripped."""
+    import re
+    text = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+    text = re.sub(r"postgres(?:ql)?://\S+", "postgresql://…", text)
+    text = re.sub(r"password=\S+", "password=…", text)
+    return f"{type(exc).__name__}: {text[:200]}" if text else type(exc).__name__
+
+
+def last_error() -> str:
+    return _state["last_error"]
 
 
 def _is_db_error(exc: Exception) -> bool:
@@ -533,8 +557,9 @@ def _is_db_error(exc: Exception) -> bool:
         import psycopg
     except ImportError:  # pragma: no cover
         return False
-    return isinstance(exc, (psycopg.OperationalError, psycopg.errors.UndefinedTable,
-                            psycopg.errors.UndefinedColumn, psycopg.InterfaceError))
+    # Any driver error (unreachable host, bad credentials, malformed URL, missing table) degrades
+    # to the fallback dataset instead of failing the request.
+    return isinstance(exc, psycopg.Error)
 
 
 def fallback_label() -> str:

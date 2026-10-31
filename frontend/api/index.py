@@ -44,11 +44,15 @@ def health():
     surge.predict({"lat": 19.81, "lng": 85.83, "wind_speed": 140.0, "rainfall_mm": 250.0})
     triage.deterministic("flood people trapped need boat")
     inference_ms = round((time.perf_counter() - started) * 1000, 3)
-    return {
+    database = db.database_status()
+    body = {
         "status": "ONLINE",
         "system": "VOLENTIFY DISASTER INTELLIGENCE PLATFORM",
         "version": VERSION,
-        "database": db.database_status(),
+        "database": database,
         "ml_inference": "ONLINE",
         "inference_selftest_ms": inference_ms,
     }
+    if database == "DEGRADED":
+        body["database_error"] = db.last_error()
+    return body

@@ -2,7 +2,6 @@ import Link from 'next/link';
 import HomeHero from '@/components/home/HomeHero';
 import MapPreview from '@/components/home/MapPreview';
 import { ButtonLink } from '@/components/ui/Button';
-import { MESH_APK_URL } from '@/lib/constants';
 
 const MESH_STEPS = [
   {
@@ -52,12 +51,10 @@ export default function HomePage() {
               When towers fail, the phones in the field become the network. Every report shows exactly where it is in its
               journey, so nobody mistakes “saved on my phone” for “command has it”.
             </p>
-            {MESH_APK_URL && (
-              <div className="space-y-2 pt-2">
-                <ButtonLink href={MESH_APK_URL} variant="secondary">Download the Android app</ButtonLink>
-                <p className="text-xs text-stone">Android 8.0 or newer · Bluetooth LE</p>
-              </div>
-            )}
+            <div className="space-y-2 pt-2">
+              <ButtonLink href="/mesh">Get the Android app</ButtonLink>
+              <p className="text-xs text-stone">Free · Android 8.0 or newer · Bluetooth LE</p>
+            </div>
           </div>
           <ol className="relative space-y-12 border-l border-line pl-8 sm:pl-12">
             {MESH_STEPS.map((s, i) => (

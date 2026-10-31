@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LogOut, Menu, Phone, X } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, Phone, Smartphone, X } from 'lucide-react';
 import { ROLE_META } from '@/lib/constants';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
@@ -85,6 +85,9 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link href="/mesh" className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] text-ivory ring-1 ring-inset ring-line-strong transition-colors hover:bg-ivory/[0.05] md:flex">
+            <Smartphone className="h-3.5 w-3.5 text-gold" aria-hidden /> Get the app
+          </Link>
           <a href="tel:112" className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] text-critical ring-1 ring-inset ring-critical/30 transition-colors hover:bg-critical/10 sm:flex">
             <Phone className="h-3.5 w-3.5" aria-hidden /> Emergency 112
           </a>
@@ -129,7 +132,7 @@ export default function Navbar() {
       {mobile && (
         <nav className="border-t border-line bg-ink lg:hidden" aria-label="Mobile">
           <div className="page grid gap-1 py-4">
-            {[...PRIMARY, ...INTELLIGENCE, { href: '/resources', label: 'Resources' }, ...consoleLinks].map((l) => (
+            {[...PRIMARY, ...INTELLIGENCE, { href: '/resources', label: 'Resources' }, { href: '/mesh', label: 'Get the Android app' }, ...consoleLinks].map((l) => (
               <Link key={l.href} href={l.href} className={cn('rounded-lg px-3 py-2.5 text-[0.9375rem]', active(l.href) ? 'bg-ivory/[0.06] text-ivory' : 'text-sand')}>
                 {l.label}
               </Link>

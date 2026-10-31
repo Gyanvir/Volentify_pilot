@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -23,12 +24,28 @@ import org.volentify.mesh.sync.GatewaySync
 
 data class Incident(val id: String, val title: String, val category: String)
 
+const val MAX_MESSAGE = 500
+
 class MeshViewModel(app: Application) : AndroidViewModel(app) {
     val settings = Settings(app)
     private val dao = MeshDatabase.get(app).dao()
 
     val events: StateFlow<List<MeshEvent>> = dao.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val pending: StateFlow<Int> = dao.observePendingCount().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /** Broadcast messages: situation updates carrying a text "message" payload. */
+    val messages: StateFlow<List<MeshEvent>> = dao.observeAll()
+        .map { all -> all.filter { it.type == EventType.DISASTER_STATUS && it.payloadJson.contains("\"message\"") } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun sendMessage(text: String, priority: Priority) {
+        val body = text.trim().take(MAX_MESSAGE)
+        if (body.isEmpty()) return
+        createReport(
+            EventType.DISASTER_STATUS, priority,
+            mapOf("message" to body, "from" to settings.displayName), disasterId = null,
+        ) {}
+    }
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()

@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 .next/
 out/
 *.tsbuildinfo
@@ -19,3 +19,4 @@ mesh-android/build/
 mesh-android/app/build/
 mesh-android/local.properties
 *.jks
+mesh-android/signing/

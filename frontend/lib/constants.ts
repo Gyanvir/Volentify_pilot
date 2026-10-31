@@ -53,7 +53,3 @@ export const CATEGORY_HEX: Record<string, string> = {
   Cyclone: '#ff5a4e', Flood: '#8fb3d9', Landslide: '#d4b483', Wildfire: '#ff9a3c', Heatwave: '#e9c46a',
   Earthquake: '#c9a2e8',
 };
-
-/** Where the Volentify Mesh Android app can be downloaded (GitHub release asset). */
-export const MESH_APK_URL: string =
-  process.env.NEXT_PUBLIC_MESH_APK_URL || 'https://github.com/Gyanvir/Volentify_pilot/releases/latest/download/volentify-mesh.apk';

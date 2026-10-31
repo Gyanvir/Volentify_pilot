@@ -7,7 +7,7 @@ const COLUMNS = [
     { href: '/disaster-intelligence', label: 'Satellite & bulletins' }, { href: '/analytics', label: 'Analytics' },
   ] },
   { title: 'Response network', links: [
-    { href: '/volunteer', label: 'Volunteer dispatch' }, { href: '/agency', label: 'Command hub' },
+    { href: '/mesh', label: 'Volentify Mesh app' }, { href: '/volunteer', label: 'Volunteer dispatch' }, { href: '/agency', label: 'Command hub' },
     { href: '/ngo-partners', label: 'NGO partners' }, { href: '/government', label: 'Government agencies' },
     { href: '/resources', label: 'Hospitals & shelters' },
   ] },

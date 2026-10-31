@@ -135,10 +135,16 @@ class BleMeshService : LifecycleService() {
             .setContentIntent(open)
             .setOngoing(true)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: RuntimeException) {
+            // Android 14+ refuses a connected-device service without Bluetooth permission; stop cleanly.
+            MeshState.update { it.copy(running = false, error = "Allow nearby devices to start the relay") }
+            stopSelf()
         }
     }
 
@@ -165,13 +171,15 @@ class BleMeshService : LifecycleService() {
             if (responseNeeded) gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
             if (characteristic.uuid != INBOX_UUID || value == null) return
             val message = reassembler.accept(device.address, value, System.currentTimeMillis()) ?: return
-            lifecycleScope.launch(Dispatchers.IO) { ingest(String(message, Charsets.UTF_8)) }
+            lifecycleScope.launch(Dispatchers.IO) { ingest(String(message, Charsets.UTF_8), device.address) }
         }
     }
 
-    private suspend fun ingest(raw: String) {
+    private suspend fun ingest(raw: String, from: String) {
         val now = System.currentTimeMillis()
         val event = Envelope.receive(raw, now) ?: return // invalid or exhausted TTL: dropped (FR-05, FR-07)
+        // Never echo a report back to the phone that just gave it to us.
+        sentTo.getOrPut(from) { ConcurrentHashMap.newKeySet() }.add(event.eventId)
         if (dao.insert(event) != -1L) {
             MeshState.update { it.copy(received = it.received + 1, lastExchangeAt = now) }
             GatewaySync.requestSoon(this)
@@ -225,7 +233,7 @@ class BleMeshService : LifecycleService() {
     // ─── Client session: push relayable envelopes to one peer ──────────────
 
     private suspend fun exchange(device: BluetoothDevice) = sessionLock.withLock {
-        val already = sentTo.getOrPut(device.address) { mutableSetOf() }
+        val already = sentTo.getOrPut(device.address) { ConcurrentHashMap.newKeySet() }
         val batch = dao.relayable(MAX_EVENTS_PER_SESSION).filter { it.eventId !in already }
         if (batch.isEmpty()) return@withLock
         val session = GattSession(device)

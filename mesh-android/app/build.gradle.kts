@@ -10,7 +10,7 @@ plugins {
 // Release signing comes from environment variables in CI (see .github/workflows/android.yml).
 // Without them the release build is signed with the debug key so it still installs.
 val keystorePath: String? = System.getenv("VOLENTIFY_KEYSTORE")
-val defaultServer: String = System.getenv("VOLENTIFY_SERVER_URL")?.takeIf { it.isNotBlank() } ?: "https://volentify-pilot.vercel.app"
+val defaultServer: String = System.getenv("VOLENTIFY_SERVER_URL")?.takeIf { it.isNotBlank() } ?: "https://volentify.vercel.app"
 val versionCodeEnv: Int = (System.getenv("VERSION_CODE") ?: "1").toInt()
 
 android {
@@ -39,7 +39,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            // Shrinking off for the pilot: avoids R8 stripping reflection-loaded classes (Room, WorkManager).
+            isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (keystorePath != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }

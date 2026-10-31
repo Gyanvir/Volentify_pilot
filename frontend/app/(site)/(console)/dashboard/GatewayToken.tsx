@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Copy, KeyRound } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { MESH_APK_URL } from '@/lib/constants';
 import { formatDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -47,9 +46,7 @@ export function GatewayToken() {
             When your phone carries field reports out of a no-signal zone, the Volentify Mesh app uses this token to upload
             its outbox. Paste it into the app at check-in. It expires on its own; issue a new one each shift.
           </p>
-          {MESH_APK_URL && (
-            <a href={MESH_APK_URL} className="link inline-block pt-1 text-sm">Download the Volentify Mesh app for Android</a>
-          )}
+          <a href="/mesh" className="link inline-block pt-1 text-sm">Get the Volentify Mesh app for Android</a>
         </div>
       </div>
       {token ? (

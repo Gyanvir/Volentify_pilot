@@ -44,7 +44,13 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-fun HomeScreen(vm: MeshViewModel, onNewReport: () -> Unit, onSettings: () -> Unit, onGrantPermissions: () -> Unit) {
+fun HomeScreen(
+    vm: MeshViewModel,
+    onNewReport: () -> Unit,
+    onMessages: () -> Unit,
+    onSettings: () -> Unit,
+    onGrantPermissions: () -> Unit,
+) {
     val events by vm.events.collectAsState()
     val pending by vm.pending.collectAsState()
     val mesh by MeshState.snapshot.collectAsState()
@@ -109,8 +115,13 @@ fun HomeScreen(vm: MeshViewModel, onNewReport: () -> Unit, onSettings: () -> Uni
                 colors = ButtonDefaults.buttonColors(containerColor = Palette.Signal, contentColor = Palette.Ink),
             ) { Text("New field report", fontSize = 16.sp) }
             Spacer(Modifier.height(4.dp))
-            OutlinedButton(onClick = { vm.syncNow() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(50)) {
-                Text("Sync now", color = Palette.Ivory)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onMessages, modifier = Modifier.weight(1f), shape = RoundedCornerShape(50)) {
+                    Text("Messages", color = Palette.Ivory)
+                }
+                OutlinedButton(onClick = { vm.syncNow() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(50)) {
+                    Text("Sync now", color = Palette.Ivory)
+                }
             }
             message?.let { Text(it, color = Palette.Gold, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp)) }
         }

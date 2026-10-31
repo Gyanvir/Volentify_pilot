@@ -22,12 +22,13 @@ import org.volentify.mesh.mesh.BleMeshService
 import org.volentify.mesh.mesh.MeshPermissions
 import org.volentify.mesh.ui.HomeScreen
 import org.volentify.mesh.ui.MeshViewModel
+import org.volentify.mesh.ui.MessagesScreen
 import org.volentify.mesh.ui.ReportScreen
 import org.volentify.mesh.ui.SettingsScreen
 import org.volentify.mesh.ui.theme.Palette
 import org.volentify.mesh.ui.theme.VolentifyTheme
 
-enum class Screen { Home, Report, Settings }
+enum class Screen { Home, Report, Messages, Settings }
 
 class MainActivity : ComponentActivity() {
     private val vm: MeshViewModel by viewModels()
@@ -57,10 +58,12 @@ class MainActivity : ComponentActivity() {
                             Screen.Home -> HomeScreen(
                                 vm = vm,
                                 onNewReport = { screen = Screen.Report },
+                                onMessages = { screen = Screen.Messages },
                                 onSettings = { screen = Screen.Settings },
                                 onGrantPermissions = { launcher.launch(MeshPermissions.required()) },
                             )
                             Screen.Report -> ReportScreen(vm = vm, onClose = { screen = Screen.Home })
+                            Screen.Messages -> MessagesScreen(vm = vm, onClose = { screen = Screen.Home })
                             Screen.Settings -> SettingsScreen(vm = vm, onClose = { screen = Screen.Home })
                         }
                     }

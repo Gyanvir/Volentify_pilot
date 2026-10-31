@@ -31,6 +31,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_MASK, false)
         set(v) = prefs.edit().putBoolean(KEY_MASK, v).apply()
 
+    /** Name shown on messages this phone sends. */
+    var displayName: String
+        get() = prefs.getString(KEY_NAME, null) ?: "Field team"
+        set(v) = prefs.edit().putString(KEY_NAME, v.trim().take(40).ifEmpty { "Field team" }).apply()
+
     var lastSyncAt: Long
         get() = prefs.getLong(KEY_SYNC, 0)
         set(v) = prefs.edit().putLong(KEY_SYNC, v).apply()
@@ -53,5 +58,6 @@ class Settings(context: Context) {
         const val KEY_SYNC = "last_sync_at"
         const val KEY_SYNC_MSG = "last_sync_message"
         const val KEY_INCIDENTS = "incidents_json"
+        const val KEY_NAME = "display_name"
     }
 }

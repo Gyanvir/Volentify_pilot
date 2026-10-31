@@ -34,6 +34,7 @@ fun SettingsScreen(vm: MeshViewModel, onClose: () -> Unit) {
     var server by remember { mutableStateOf(vm.settings.serverUrl) }
     var token by remember { mutableStateOf(vm.settings.gatewayToken.orEmpty()) }
     var mask by remember { mutableStateOf(vm.settings.maskLocation) }
+    var name by remember { mutableStateOf(vm.settings.displayName) }
     val colors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Palette.Signal, unfocusedBorderColor = Palette.Line, focusedTextColor = Palette.Ivory,
         unfocusedTextColor = Palette.Ivory, cursorColor = Palette.Signal, focusedLabelColor = Palette.Signal,
@@ -45,6 +46,9 @@ fun SettingsScreen(vm: MeshViewModel, onClose: () -> Unit) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             TextButton(onClick = onClose) { Text("Done", color = Palette.Sand) }
         }
+
+        Text("Your name on messages", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(name, { name = it.take(40) }, label = { Text("Name or team") }, singleLine = true, colors = colors, modifier = Modifier.fillMaxWidth())
 
         Text("Gateway sync", style = MaterialTheme.typography.titleMedium)
         Text(
@@ -58,6 +62,7 @@ fun SettingsScreen(vm: MeshViewModel, onClose: () -> Unit) {
                 vm.settings.serverUrl = server
                 vm.settings.gatewayToken = token
                 vm.settings.maskLocation = mask
+                vm.settings.displayName = name
                 vm.syncNow()
                 onClose()
             },
