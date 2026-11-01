@@ -366,6 +366,7 @@ def test_gemini_switches_from_retired_model(monkeypatch):
     import httpx
     from api._lib.engines import gemini
     monkeypatch.setenv("GEMINI_API_KEY", "AIzaTest")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
     get_settings.cache_clear()
     gemini._state.update(model=None, last_error=None)
     calls = []

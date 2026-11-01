@@ -18,7 +18,7 @@ from ..core.config import get_settings
 
 AI_STUDIO = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 VERTEX_EXPRESS = "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent"
-TIMEOUT_S = httpx.Timeout(15.0, connect=5.0)  # pages wait on this; the rule-based fallback answers after it
+TIMEOUT_S = httpx.Timeout(12.0, connect=4.0)  # pages wait on this; the rule-based fallback answers after it
 AI_STUDIO_MODELS = "https://generativelanguage.googleapis.com/v1beta/models"
 _state: dict[str, Any] = {"last_error": None, "endpoint": None, "model": None, "thinking_low": True}
 _SKIP = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "preview", "vision")
@@ -44,6 +44,12 @@ def discover_model(key: str) -> Optional[str]:
     """Newest stable Flash model this key can call."""
     names = [n for n in list_models(key) if "flash" in n and not any(t in n for t in _SKIP)]
     return names[0] if names else None
+
+
+def _next_model(key: str, current: str) -> Optional[str]:
+    names = [n for n in list_models(key) if "flash" in n and not any(t in n for t in _SKIP)]
+    older = [n for n in names if _version(n) < _version(current)]
+    return older[0] if older else None
 
 
 def _model(key: str) -> str:
@@ -81,11 +87,13 @@ def generate_text(prompt: str, *, json_output: bool = False, temperature: float 
     if json_output:
         config["responseMimeType"] = "application/json"
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": config}
-    text, error, retired = _call_fast(key, _model(key), body)
-    if text is None and retired:
-        # The configured model was retired or is not offered to this key: switch to the newest one available.
-        replacement = discover_model(key)
-        if replacement and replacement != _model(key):
+    current = _model(key)
+    text, error, retired = _call_fast(key, current, body)
+    timed_out = bool(error and error.startswith(("ReadTimeout", "WriteTimeout", "ConnectTimeout")))
+    if text is None and (retired or timed_out):
+        # Retired (404): move to the newest Flash model. Timed out: step down to the next Flash model.
+        replacement = discover_model(key) if retired else _next_model(key, current)
+        if replacement and replacement != current:
             _state["model"] = replacement
             text, error, _ = _call_fast(key, replacement, body)
     if text is None:

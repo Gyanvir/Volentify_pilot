@@ -109,7 +109,7 @@ def get_settings() -> Settings:
         session_secret_source=secret_source,
         google_client_id=_env("GOOGLE_CLIENT_ID") or _env("NEXT_PUBLIC_GOOGLE_CLIENT_ID"),
         gemini_api_key=_env("GEMINI_API_KEY"),
-        gemini_model=_env("GEMINI_MODEL", "gemini-2.5-flash"),
+        gemini_model=_env("GEMINI_MODEL", "gemini-3.5-flash"),  # measured fastest reliable Flash, Nov 2026
         impossibl_api_key=_env("IMPOSSIBL_API_KEY"),
         impossibl_api_url=_env("IMPOSSIBL_API_URL", "https://api.impossibl.com/v1/triage"),
         environment=environment,
