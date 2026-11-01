@@ -87,6 +87,16 @@ def session_secret_and_source(environment: str, database_url: str) -> tuple[str,
     return "", "missing"
 
 
+def _public_url(environment: str) -> str:
+    """Site origin for OAuth redirects. A localhost NEXTAUTH_URL copied into a deployment is ignored."""
+    url = _env("NEXTAUTH_URL").rstrip("/")
+    if environment != "development" and any(h in url for h in ("localhost", "127.0.0.1", "[::1]")):
+        url = ""
+    if not url and _env("VERCEL_ENV") == "production" and _env("VERCEL_PROJECT_PRODUCTION_URL"):
+        url = "https://" + _env("VERCEL_PROJECT_PRODUCTION_URL")
+    return url
+
+
 @lru_cache
 def get_settings() -> Settings:
     environment = _env("VERCEL_ENV") or _env("VOLENTIFY_ENV", "development")
@@ -104,5 +114,5 @@ def get_settings() -> Settings:
         impossibl_api_url=_env("IMPOSSIBL_API_URL", "https://api.impossibl.com/v1/triage"),
         environment=environment,
         admin_emails=frozenset(e.strip().lower() for e in _env("VOLENTIFY_ADMIN_EMAILS").split(",") if e.strip()),
-        public_url=_env("NEXTAUTH_URL").rstrip("/"),
+        public_url=_public_url(environment),
     )

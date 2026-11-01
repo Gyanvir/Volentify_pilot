@@ -64,12 +64,18 @@ def _blank_user(name: str, email: str, provider: str, **extra) -> dict:
 
 # ─── Google OAuth 2.0 (OpenID Connect implicit id_token flow) ───────────────
 
+def _request_origin(request: Request) -> str:
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    return f"{proto}://{host}" if host else str(request.base_url).rstrip("/")
+
+
 @router.get("/auth/google/start", include_in_schema=False)
 def google_start(request: Request, next: str = "/dashboard"):
     settings = get_settings()
     if not settings.google_client_id:
         return RedirectResponse("/login?error=google_unconfigured", status_code=302)
-    origin = settings.public_url or str(request.base_url).rstrip("/")
+    origin = settings.public_url or _request_origin(request)
     nonce, state = secrets.token_urlsafe(24), secrets.token_urlsafe(16)
     params = {"client_id": settings.google_client_id, "redirect_uri": f"{origin}/auth/callback",
               "response_type": "id_token", "scope": "openid email profile", "nonce": nonce,

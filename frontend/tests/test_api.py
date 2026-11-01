@@ -349,3 +349,14 @@ def test_research_archive_records_forecasts_and_snapshots(client, monkeypatch):
     assert kinds["forecast"]["count"] == 1 and kinds["cap_alert"]["count"] == 1
     assert kinds["platform_snapshot"]["count"] == 2
     assert client.get("/api/research/export").status_code == 401
+
+
+def test_localhost_public_url_ignored_in_production(client, monkeypatch):
+    monkeypatch.setenv("VOLENTIFY_ENV", "production")
+    monkeypatch.setenv("NEXTAUTH_URL", "http://localhost:3000")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "abc.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    r = client.get("/api/auth/google/start", headers={"x-forwarded-host": "volentify.vercel.app",
+                                                      "x-forwarded-proto": "https"}, follow_redirects=False)
+    assert r.status_code == 302
+    assert "redirect_uri=https%3A%2F%2Fvolentify.vercel.app%2Fauth%2Fcallback" in r.headers["location"]
