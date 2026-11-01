@@ -5,12 +5,14 @@ import { Prose } from '../_components/Prose';
 
 export const metadata: Metadata = { title: 'Research' };
 
-const MODELS = [
-  { name: 'Storm-surge & hazard model', target: 'Surge RMSE ±0.28 m · 94.8% accuracy · < 50 ms', detail: 'Eight features: wind, 24 h rainfall, pressure deficit, coordinates, distance to coast, elevation and tidal phase. Ships with a calibrated physical estimator; loads a trained XGBoost booster when one is supplied.' },
-  { name: 'Laya multilingual triage', target: '< 35 ms end to end', detail: 'Three tiers: a local router package, a hosted endpoint, and a deterministic lexicon matcher across Indian scripts that always answers in under a millisecond.' },
-  { name: 'SitRep language model', target: 'F1 98.1% · 110 ms CPU', detail: 'Multilingual DistilBERT with category, urgency and entity heads, planned as an INT8 ONNX model for future on-device use.' },
-  { name: 'Report corroboration', target: 'Clusters within 15 km and 2 h', detail: 'Spatio-temporal clustering with optional Gemini 2.5 Flash merging of corroborated facts and 150-word NDRF briefings.' },
-  { name: 'Priority-driven dispatch', target: '< 1 ms · 0% rare-skill squander', detail: 'Greedy lexicographic allocation with skill scarcity, an anti-squander penalty, distance decay and fatigue. Each run reports its own measured latency.' },
+type Status = 'Measured' | 'Specification target' | 'Planned';
+const MODELS: { name: string; status: Status; figure: string; detail: string }[] = [
+  { name: 'Cyclone intensity & severe-storm models', status: 'Measured', figure: 'Held-out storm scores on the Forecasts page · retrained weekly', detail: 'Two XGBoost models trained on NOAA IBTrACS North Indian Ocean best tracks since 1980: the 24-hour change in maximum wind, and the probability of reaching severe cyclonic storm strength (≥ 48 kt). Evaluated with storm-grouped cross-validation against persistence and climatology.' },
+  { name: 'Priority-driven dispatch', status: 'Measured', figure: 'Benchmark against exact optimisation on the Forecasts page · rerun weekly', detail: 'Greedy lexicographic allocation with skill scarcity, an anti-squander penalty, distance decay and fatigue, compared each week with the Hungarian optimum, an exact priority MILP and a nearest-responder baseline.' },
+  { name: 'Storm-surge & hazard model', status: 'Specification target', figure: 'Surge RMSE ±0.28 m · < 50 ms', detail: 'A calibrated physical estimator (inverse barometer, saturating wind set-up, rain, tide, coastline decay) driven by the trained 24-hour wind forecast. Not yet validated against observations: no open storm-surge record exists for India.' },
+  { name: 'Laya multilingual triage', status: 'Specification target', figure: '< 35 ms end to end', detail: 'Three tiers: a local router package, a hosted endpoint, and a deterministic lexicon matcher across Indian scripts that always answers in under a millisecond. Each call returns its measured latency.' },
+  { name: 'Report corroboration', status: 'Specification target', figure: 'Clusters within 15 km and 2 h', detail: 'Spatio-temporal clustering with optional Gemini merging of corroborated facts and 150-word briefings.' },
+  { name: 'SitRep language model', status: 'Planned', figure: 'F1 98.1% · 110 ms CPU (target)', detail: 'Multilingual DistilBERT with category, urgency and entity heads, planned as an INT8 ONNX model for on-device use. Not built yet.' },
 ];
 
 const PAPERS = [
@@ -25,20 +27,23 @@ export default function ResearchPage() {
       <PageHeader
         label="Research"
         title="The methods behind the platform."
-        lede="How each model and engine works, and the performance targets set in the product specification."
+        lede="How each model and engine works, what has been measured, and what is still a target."
       />
       <Section title="Models and engines">
         <div className="rounded-2xl border border-gold/25 bg-gold/[0.04] p-4 text-sm leading-relaxed text-sand">
-          Figures in this table are <strong className="font-medium text-ivory">targets reported in the Volentify product specification</strong>,
-          not independent measurements of this deployment. Live latencies are returned by each API call and shown on the forecasting
-          and dispatch pages.
+          Each figure is labelled. <strong className="font-medium text-ivory">Measured</strong> results are recomputed by the weekly
+          pipeline and published on the forecasting page; <strong className="font-medium text-ivory">specification targets</strong> are
+          goals from the product specification that have not yet been independently measured.
         </div>
         <div className="mt-6 divide-y divide-line border-y border-line">
           {MODELS.map((m) => (
             <div key={m.name} className="grid gap-3 py-6 md:grid-cols-[16rem_1fr_17rem] md:gap-8">
               <h3 className="text-2xl">{m.name}</h3>
               <p className="max-w-[62ch] text-sm leading-relaxed text-stone">{m.detail}</p>
-              <p className="text-sm text-ivory md:text-right">{m.target}</p>
+              <div className="space-y-2 md:text-right">
+                <Pill tone={m.status === 'Measured' ? 'gold' : 'neutral'} className="w-fit md:ml-auto">{m.status}</Pill>
+                <p className="text-sm text-ivory">{m.figure}</p>
+              </div>
             </div>
           ))}
         </div>

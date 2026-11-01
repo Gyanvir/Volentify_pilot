@@ -67,3 +67,16 @@ def test_api_forecast_uses_exported_models(table, tmp_path, monkeypatch):
     assert out and 0 <= out["severe_probability"] <= 1 and out["wind_24h_kt"] >= 0
     assert json.loads((tmp_path / "model_card.json").read_text())["data"]["storms"] == 3
     cyclone._models.cache_clear()
+
+
+def test_dispatch_benchmark_quick():
+    """Sperling must never fill fewer critical slots than the nearest-responder baseline, and the
+    exact priority MILP is an upper bound on critical coverage."""
+    from volentify_ml import dispatch_bench as B
+    report = B.benchmark(sizes=[(40, 18)], seeds=(1, 2))
+    m = report["results"][0]["methods"]
+    assert set(m) == {"sperling", "nearest", "optimum", "milp_lex"}
+    assert m["optimum"]["score_vs_optimum"] == 1.0
+    assert m["sperling"]["critical_fill"] >= m["nearest"]["critical_fill"]
+    assert m["milp_lex"]["critical_fill"] >= m["sperling"]["critical_fill"] - 1e-9
+    assert m["sperling"]["specialists_on_generic"] <= m["nearest"]["specialists_on_generic"]

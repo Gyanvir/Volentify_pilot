@@ -1,7 +1,7 @@
 name: Train cyclone models
 
-# Downloads the latest IBTrACS North Indian Ocean best tracks, retrains and evaluates the models,
-# and commits the exported models + model card to frontend/api/_lib/models (Vercel redeploys).
+# Downloads the latest IBTrACS North Indian Ocean best tracks, retrains and evaluates the models, reruns the
+# dispatch benchmark, and commits models, model card and benchmark to frontend/api/_lib/models (Vercel redeploys).
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
     - cron: "17 21 * * 0" # weekly, Sunday night IST
   push:
     branches: [main]
-    paths: ["ml/volentify_ml/**", ".github/workflows/ml-train.yml"]
+    paths: ["ml/volentify_ml/**", "frontend/api/_lib/engines/dispatch.py", ".github/workflows/ml-train.yml"]
 
 permissions:
   contents: write
@@ -27,6 +27,9 @@ jobs:
       - name: Train on the full archive
         working-directory: ml
         run: python -m volentify_ml.train --download --out ../frontend/api/_lib/models
+      - name: Benchmark the dispatch engine
+        working-directory: ml
+        run: python -m volentify_ml.dispatch_bench --out ../frontend/api/_lib/models/dispatch_benchmark.json
       - name: Verify the API serves the new models
         run: python -m pytest frontend/tests -q
       - name: Commit models
@@ -35,5 +38,6 @@ jobs:
           git config user.email "volentify-ml-bot@users.noreply.github.com"
           git add frontend/api/_lib/models
           if git diff --cached --quiet; then echo "No model changes"; exit 0; fi
-          git commit -m "Retrain cyclone models on latest IBTrACS"
+          git commit -m "Retrain cyclone models on latest IBTrACS and rerun dispatch benchmark"
+          git pull --rebase
           git push

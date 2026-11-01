@@ -9,6 +9,7 @@ The endpoint is chosen from the key and the other is tried if the first rejects 
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional
 
 import httpx
@@ -18,7 +19,32 @@ from ..core.config import get_settings
 AI_STUDIO = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 VERTEX_EXPRESS = "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent"
 TIMEOUT_S = 8.0
-_state: dict[str, Optional[str]] = {"last_error": None, "endpoint": None}
+AI_STUDIO_MODELS = "https://generativelanguage.googleapis.com/v1beta/models"
+_state: dict[str, Optional[str]] = {"last_error": None, "endpoint": None, "model": None}
+_SKIP = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "preview", "vision")
+
+
+def _version(name: str) -> tuple:
+    return tuple(int(n) for n in re.findall(r"\d+", name.split("/")[-1])[:3])
+
+
+def discover_model(key: str) -> Optional[str]:
+    """Newest stable Flash model this key can call (AI Studio model list)."""
+    try:
+        resp = httpx.get(AI_STUDIO_MODELS, params={"pageSize": 200}, headers={"x-goog-api-key": key}, timeout=TIMEOUT_S)
+        resp.raise_for_status()
+        models = resp.json().get("models", [])
+    except (httpx.HTTPError, ValueError):
+        return None
+    names = [m["name"].split("/")[-1] for m in models
+             if "generateContent" in m.get("supportedGenerationMethods", [])
+             and "flash" in m.get("name", "") and not any(t in m["name"] for t in _SKIP)]
+    return max(names, key=_version) if names else None
+
+
+def _model(key: str) -> str:
+    """GEMINI_MODEL if set; otherwise (or once it has been retired) the newest Flash model available."""
+    return _state["model"] or get_settings().gemini_model
 
 
 def available() -> bool:
@@ -51,16 +77,32 @@ def generate_text(prompt: str, *, json_output: bool = False, temperature: float 
     if json_output:
         config["responseMimeType"] = "application/json"
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": config}
-    error = None
+    text, error, retired = _call(key, _model(key), body)
+    if text is None and retired:
+        # The configured model was retired or is not offered to this key: switch to the newest one available.
+        replacement = discover_model(key)
+        if replacement and replacement != _model(key):
+            _state["model"] = replacement
+            text, error, _ = _call(key, replacement, body)
+    if text is None:
+        _state["last_error"] = error
+    return text
+
+
+def _call(key: str, model: str, body: dict) -> tuple[Optional[str], Optional[str], bool]:
+    """(text, error, model_unavailable) for one model across both endpoints."""
+    error, retired = None, False
     for endpoint in _endpoints(key):
         try:
-            resp = httpx.post(endpoint.format(model=settings.gemini_model), json=body, timeout=TIMEOUT_S,
+            resp = httpx.post(endpoint.format(model=model), json=body, timeout=TIMEOUT_S,
                               headers={"x-goog-api-key": key})
         except httpx.HTTPError as exc:
             error = f"{type(exc).__name__}: {str(exc)[:180]}"
             break  # network trouble — the other endpoint will not do better
+        if resp.status_code == 404:
+            retired = True
         if resp.status_code in (400, 401, 403, 404) and endpoint != _endpoints(key)[-1]:
-            error = _summarise(resp)
+            error = error or _summarise(resp)
             continue  # key belongs to the other service, or the model is not offered there
         if resp.status_code != 200:
             error = _summarise(resp)
@@ -68,12 +110,10 @@ def generate_text(prompt: str, *, json_output: bool = False, temperature: float 
         try:
             text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         except (KeyError, IndexError, ValueError):
-            error = "Unexpected response shape (blocked or empty candidate)"
-            break
+            return None, "Unexpected response shape (blocked or empty candidate)", False
         _state.update(last_error=None, endpoint="vertex-express" if endpoint == VERTEX_EXPRESS else "ai-studio")
-        return text
-    _state["last_error"] = error
-    return None
+        return text, None, False
+    return None, error, retired
 
 
 def generate_json(prompt: str, schema_hint: str) -> Optional[dict[str, Any]]:
@@ -93,5 +133,5 @@ def probe() -> dict[str, Any]:
     if not available():
         return {"configured": False, "ok": False, "error": "GEMINI_API_KEY is not set"}
     ok = generate_text("Reply with the single word: ready", temperature=0.0) is not None
-    return {"configured": True, "ok": ok, "model": get_settings().gemini_model,
+    return {"configured": True, "ok": ok, "model": _model(get_settings().gemini_api_key),
             **({"endpoint": _state["endpoint"]} if ok else {"error": _state["last_error"]})}

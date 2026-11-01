@@ -28,7 +28,7 @@ def predict(body: PredictionRequest):
 def ml_models():
     """Model cards for the trained models this deployment serves (empty until the pipeline has run)."""
     card = cyclone.model_card()
-    return {"cyclone": card, "trained": card is not None}
+    return {"cyclone": card, "trained": card is not None, "dispatch": cyclone.dispatch_benchmark()}
 
 
 @router.post("/triage/laya", response_model=TriageResponse)

@@ -28,6 +28,15 @@ def _models() -> Optional[tuple[Booster, Booster, dict]]:
         return None
 
 
+@lru_cache(maxsize=1)
+def dispatch_benchmark() -> Optional[dict]:
+    """Measured dispatch performance written by ml/volentify_ml/dispatch_bench.py (weekly workflow)."""
+    try:
+        return json.loads((MODEL_DIR / "dispatch_benchmark.json").read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def model_card() -> Optional[dict]:
     loaded = _models()
     return loaded[2] if loaded else None

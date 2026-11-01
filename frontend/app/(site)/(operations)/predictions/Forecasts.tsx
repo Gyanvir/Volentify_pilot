@@ -10,6 +10,7 @@ import { ErrorState, LoadingRows, Skeleton } from '@/components/ui/DataState';
 import { Field, Input } from '@/components/ui/Field';
 import { PageHeader, Panel, Section } from '@/components/ui/Page';
 import ModelCard from './ModelCard';
+import DispatchBenchmark from './DispatchBenchmark';
 import TriagePlayground from './TriagePlayground';
 
 interface SurgeInputs {
@@ -243,6 +244,9 @@ export default function Forecasts() {
       </Section>
       <Section title="How the trained models perform" description="Measured on cyclones held out from training, against the simple baselines forecasters use.">
         <ModelCard />
+      </Section>
+      <Section title="How dispatch performs" description="The live Sperling engine measured against exact optimisation and a nearest-responder baseline.">
+        <DispatchBenchmark />
       </Section>
       <Section title="Forecasts for active incidents">
         <IncidentForecasts />

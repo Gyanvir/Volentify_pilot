@@ -360,3 +360,33 @@ def test_localhost_public_url_ignored_in_production(client, monkeypatch):
                                                       "x-forwarded-proto": "https"}, follow_redirects=False)
     assert r.status_code == 302
     assert "redirect_uri=https%3A%2F%2Fvolentify.vercel.app%2Fauth%2Fcallback" in r.headers["location"]
+
+
+def test_gemini_switches_from_retired_model(monkeypatch):
+    import httpx
+    from api._lib.engines import gemini
+    monkeypatch.setenv("GEMINI_API_KEY", "AIzaTest")
+    get_settings.cache_clear()
+    gemini._state.update(model=None, last_error=None)
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append(url)
+        if "gemini-2.5-flash" in url:
+            return httpx.Response(404, json={"error": {"message": "no longer available"}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "ready"}]}}]})
+
+    def fake_get(url, **kw):
+        return httpx.Response(200, request=httpx.Request("GET", url), json={"models": [
+            {"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-3.8-flash-lite", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-3.1-flash", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-4.0-flash-preview", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/text-embedding-9", "supportedGenerationMethods": ["embedContent"]}]})
+
+    monkeypatch.setattr(gemini.httpx, "post", fake_post)
+    monkeypatch.setattr(gemini.httpx, "get", fake_get)
+    assert gemini.generate_text("hi") == "ready"
+    assert gemini._state["model"] == "gemini-3.8-flash"
+    assert gemini.probe()["ok"] and gemini.probe()["model"] == "gemini-3.8-flash"
+    gemini._state.update(model=None)

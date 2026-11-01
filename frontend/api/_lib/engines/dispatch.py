@@ -86,7 +86,8 @@ def eligible(required: str, sim: float) -> bool:
 def score(task: dict, volunteer: dict, pool: Counter, workload: int) -> Candidate:
     required = task["required_skill"]
     sim = similarity(required, volunteer["skills"])
-    squander = required in GENERIC_SKILLS and sim < SIM_EXACT and is_rare_specialist(volunteer, pool)
+    # PRD §4.6: a rare specialist is protected from generic work even if they also hold the generic skill.
+    squander = required in GENERIC_SKILLS and is_rare_specialist(volunteer, pool)
     distance = haversine_km(task["lat"], task["lng"], volunteer["lat"], volunteer["lng"])
     value = (URGENCY_WEIGHT[task["urgency"]] * scarcity_index(pool, required) * sim
              * (SQUANDER_PENALTY if squander else 1.0)
