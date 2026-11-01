@@ -5,6 +5,7 @@ Production: Vercel Python serverless function; vercel.json rewrites /api/* here.
 """
 
 import os
+import re
 import sys
 import time
 
@@ -16,10 +17,12 @@ from fastapi.responses import JSONResponse  # noqa: E402
 
 from api._lib.core import db  # noqa: E402
 from api._lib.core.config import get_settings  # noqa: E402
+from api._lib.core.security import RateLimiter  # noqa: E402
 from api._lib.engines import gemini, surge, triage  # noqa: E402
 from api._lib.routers import auth, entities, intelligence, mesh, research  # noqa: E402
 
 VERSION = "3.5.0"
+_probe_limiter = RateLimiter(limit=20, window_s=3600)
 
 app = FastAPI(title="Volentify Disaster Intelligence API", version=VERSION,
               docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
@@ -40,7 +43,7 @@ async def validation_error(_: Request, exc: RequestValidationError):
 
 
 @app.get("/api/health")
-def health(deep: bool = False):
+def health(deep: bool = False, gemini_model: str | None = None):
     started = time.perf_counter()
     surge.predict({"lat": 19.81, "lng": 85.83, "wind_speed": 140.0, "rainfall_mm": 250.0})
     triage.deterministic("flood people trapped need boat")
@@ -66,5 +69,9 @@ def health(deep: bool = False):
         "public_url": settings.public_url or None,
     }
     if deep:
-        body["gemini"] = gemini.probe()
+        if gemini_model:
+            _probe_limiter.check("gemini-probe")
+            if not re.fullmatch(r"[a-z0-9.\-]{3,60}", gemini_model):
+                gemini_model = None
+        body["gemini"] = gemini.probe(gemini_model)
     return body

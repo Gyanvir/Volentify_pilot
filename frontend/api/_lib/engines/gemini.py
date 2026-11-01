@@ -28,18 +28,22 @@ def _version(name: str) -> tuple:
     return tuple(int(n) for n in re.findall(r"\d+", name.split("/")[-1])[:3])
 
 
-def discover_model(key: str) -> Optional[str]:
-    """Newest stable Flash model this key can call (AI Studio model list)."""
+def list_models(key: str) -> list[str]:
+    """Every model this key can call with generateContent (AI Studio model list), newest first."""
     try:
         resp = httpx.get(AI_STUDIO_MODELS, params={"pageSize": 200}, headers={"x-goog-api-key": key}, timeout=TIMEOUT_S)
         resp.raise_for_status()
         models = resp.json().get("models", [])
     except (httpx.HTTPError, ValueError):
-        return None
-    names = [m["name"].split("/")[-1] for m in models
-             if "generateContent" in m.get("supportedGenerationMethods", [])
-             and "flash" in m.get("name", "") and not any(t in m["name"] for t in _SKIP)]
-    return max(names, key=_version) if names else None
+        return []
+    names = [m["name"].split("/")[-1] for m in models if "generateContent" in m.get("supportedGenerationMethods", [])]
+    return sorted(names, key=_version, reverse=True)
+
+
+def discover_model(key: str) -> Optional[str]:
+    """Newest stable Flash model this key can call."""
+    names = [n for n in list_models(key) if "flash" in n and not any(t in n for t in _SKIP)]
+    return names[0] if names else None
 
 
 def _model(key: str) -> str:
@@ -128,10 +132,24 @@ def generate_json(prompt: str, schema_hint: str) -> Optional[dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
-def probe() -> dict[str, Any]:
-    """Live check used by /api/health?deep=1."""
+def probe(model: Optional[str] = None) -> dict[str, Any]:
+    """Live check used by /api/health?deep=1 (optionally &gemini_model=<one of the listed models>)."""
     if not available():
         return {"configured": False, "ok": False, "error": "GEMINI_API_KEY is not set"}
-    ok = generate_text("Reply with the single word: ready", temperature=0.0) is not None
-    return {"configured": True, "ok": ok, "model": _model(get_settings().gemini_api_key),
-            **({"endpoint": _state["endpoint"]} if ok else {"error": _state["last_error"]})}
+    key = get_settings().gemini_api_key
+    import time
+    started = time.perf_counter()
+    if model:
+        body = {"contents": [{"role": "user", "parts": [{"text": "Reply with the single word: ready"}]}],
+                "generationConfig": {"temperature": 0.0}}
+        text, error, _ = _call(key, model, body)
+        ok = text is not None
+    else:
+        ok = generate_text("Reply with the single word: ready", temperature=0.0) is not None
+        error = _state["last_error"]
+    out = {"configured": True, "ok": ok, "model": model or _model(key),
+           "seconds": round(time.perf_counter() - started, 2)}
+    out.update({"endpoint": _state["endpoint"]} if ok else {"error": error})
+    if not ok:
+        out["available_models"] = list_models(key)[:25]
+    return out
