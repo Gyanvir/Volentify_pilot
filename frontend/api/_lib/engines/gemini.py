@@ -18,9 +18,9 @@ from ..core.config import get_settings
 
 AI_STUDIO = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 VERTEX_EXPRESS = "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent"
-TIMEOUT_S = httpx.Timeout(22.0, connect=5.0)  # newer Flash models think before answering; API limit is 30 s
+TIMEOUT_S = httpx.Timeout(15.0, connect=5.0)  # pages wait on this; the rule-based fallback answers after it
 AI_STUDIO_MODELS = "https://generativelanguage.googleapis.com/v1beta/models"
-_state: dict[str, Optional[str]] = {"last_error": None, "endpoint": None, "model": None}
+_state: dict[str, Any] = {"last_error": None, "endpoint": None, "model": None, "thinking_low": True}
 _SKIP = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "preview", "vision")
 
 
@@ -81,16 +81,27 @@ def generate_text(prompt: str, *, json_output: bool = False, temperature: float 
     if json_output:
         config["responseMimeType"] = "application/json"
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": config}
-    text, error, retired = _call(key, _model(key), body)
+    text, error, retired = _call_fast(key, _model(key), body)
     if text is None and retired:
         # The configured model was retired or is not offered to this key: switch to the newest one available.
         replacement = discover_model(key)
         if replacement and replacement != _model(key):
             _state["model"] = replacement
-            text, error, _ = _call(key, replacement, body)
+            text, error, _ = _call_fast(key, replacement, body)
     if text is None:
         _state["last_error"] = error
     return text
+
+
+def _call_fast(key: str, model: str, body: dict) -> tuple[Optional[str], Optional[str], bool]:
+    """Ask for minimal thinking (short structured tasks); drop the setting if the model rejects it."""
+    if _state["thinking_low"]:
+        fast = {**body, "generationConfig": {**body["generationConfig"], "thinkingConfig": {"thinkingLevel": "low"}}}
+        text, error, retired = _call(key, model, fast)
+        if text is not None or not (error and error.startswith("HTTP 400") and "think" in error.lower()):
+            return text, error, retired
+        _state["thinking_low"] = False
+    return _call(key, model, body)
 
 
 def _call(key: str, model: str, body: dict) -> tuple[Optional[str], Optional[str], bool]:
@@ -142,7 +153,7 @@ def probe(model: Optional[str] = None) -> dict[str, Any]:
     if model:
         body = {"contents": [{"role": "user", "parts": [{"text": "Reply with the single word: ready"}]}],
                 "generationConfig": {"temperature": 0.0}}
-        text, error, _ = _call(key, model, body)
+        text, error, _ = _call_fast(key, model, body)
         ok = text is not None
     else:
         ok = generate_text("Reply with the single word: ready", temperature=0.0) is not None
