@@ -31,6 +31,15 @@ ROLE_PASS = {
 }
 
 
+def signing_key() -> str:
+    """Session signing key; refuses to sign with nothing rather than failing every unrelated endpoint."""
+    key = get_settings().session_secret
+    if not key:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "Sign-in is not configured: set NEXTAUTH_SECRET (or connect a database).")
+    return key
+
+
 # ─── Passwords (scrypt, stdlib) ─────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
@@ -57,12 +66,14 @@ def issue_session(user: dict) -> str:
         "onboarded": bool(user.get("onboarded")), "verified": bool(user.get("is_verified")), "iat": now, "exp": now + settings.session_ttl_hours * 3600,
         "typ": "session",
     }
-    return jwt.encode(claims, settings.session_secret, algorithm="HS256")
+    return jwt.encode(claims, signing_key(), algorithm="HS256")
 
 
 def decode_session(token: str) -> Optional[dict]:
+    if not get_settings().session_secret:
+        return None
     try:
-        claims = jwt.decode(token, get_settings().session_secret, algorithms=["HS256"])
+        claims = jwt.decode(token, signing_key(), algorithms=["HS256"])
     except jwt.PyJWTError:
         return None
     return claims if claims.get("typ") == "session" else None
@@ -129,7 +140,7 @@ def issue_mesh_token(user_id: str, node_uuid: Optional[str]) -> tuple[str, datet
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.mesh_token_ttl_minutes)
     claims = {"sub": user_id, "node": node_uuid, "typ": "mesh", "exp": int(expires.timestamp()),
               "iat": int(time.time()), "jti": secrets.token_hex(8)}
-    return jwt.encode(claims, settings.session_secret, algorithm="HS256"), expires
+    return jwt.encode(claims, signing_key(), algorithm="HS256"), expires
 
 
 def require_mesh_token(request: Request) -> dict:
@@ -139,7 +150,7 @@ def require_mesh_token(request: Request) -> dict:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bearer token required",
                             headers={"WWW-Authenticate": "Bearer"})
     try:
-        claims = jwt.decode(header[7:].strip(), get_settings().session_secret, algorithms=["HS256"])
+        claims = jwt.decode(header[7:].strip(), signing_key(), algorithms=["HS256"])
     except jwt.PyJWTError:
         claims = {}
     if claims.get("typ") != "mesh":
@@ -165,7 +176,7 @@ def muster_code(user_id: str, role: str) -> str:
 
 def muster_signature(user_id: str, code: str, issued_at: datetime) -> str:
     message = f"{user_id}|{code}|{int(issued_at.timestamp())}".encode()
-    return hmac.new(get_settings().session_secret.encode(), message, hashlib.sha256).hexdigest()[:24]
+    return hmac.new(signing_key().encode(), message, hashlib.sha256).hexdigest()[:24]
 
 
 # ─── Rate limiting (SEC-06) ─────────────────────────────────────────────────

@@ -21,9 +21,9 @@ const DB_STATUS: Record<Health['database'], { tone: 'good' | 'warn' | 'neutral';
   ONLINE: { tone: 'good', label: 'Database online',
     explain: 'Reads and writes go to PostgreSQL. Mesh reports are stored durably and gateways receive confirmed acknowledgements.' },
   DEGRADED: { tone: 'warn', label: 'Database unreachable',
-    explain: 'A database is configured but not responding. Screens are showing the cached dataset, and mesh gateways are told to keep reports in their outbox and retry. Check the Supabase project and DATABASE_URL.' },
+    explain: 'A database is configured but not responding. Screens are showing the cached dataset, and mesh gateways are told to keep reports in their outbox and retry. Check the database project and its connection string (DATABASE_URL or DB_URL).' },
   FALLBACK: { tone: 'neutral', label: 'No database configured',
-    explain: 'DATABASE_URL is not set, so the platform runs on its built-in demonstration dataset. New accounts and reports live in memory and disappear on restart.' },
+    explain: 'No database connection string (DATABASE_URL or DB_URL) is set, so the platform runs on its built-in demonstration dataset. New accounts and reports live in memory and disappear on restart.' },
 };
 
 function HealthPanel() {

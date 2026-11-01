@@ -15,15 +15,16 @@ from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 
 from api._lib.core import db  # noqa: E402
-from api._lib.engines import surge, triage  # noqa: E402
-from api._lib.routers import auth, entities, intelligence, mesh  # noqa: E402
+from api._lib.core.config import get_settings  # noqa: E402
+from api._lib.engines import gemini, surge, triage  # noqa: E402
+from api._lib.routers import auth, entities, intelligence, mesh, research  # noqa: E402
 
 VERSION = "3.5.0"
 
 app = FastAPI(title="Volentify Disaster Intelligence API", version=VERSION,
               docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
 
-for module in (auth, entities, mesh, intelligence):
+for module in (auth, entities, mesh, intelligence, research):
     app.include_router(module.router)
 
 
@@ -39,7 +40,7 @@ async def validation_error(_: Request, exc: RequestValidationError):
 
 
 @app.get("/api/health")
-def health():
+def health(deep: bool = False):
     started = time.perf_counter()
     surge.predict({"lat": 19.81, "lng": 85.83, "wind_speed": 140.0, "rainfall_mm": 250.0})
     triage.deterministic("flood people trapped need boat")
@@ -55,4 +56,15 @@ def health():
     }
     if database == "DEGRADED":
         body["database_error"] = db.last_error()
+    settings = get_settings()
+    # Which variables the deployment is actually using — names and sources only, never values.
+    body["configuration"] = {
+        "database_variable": settings.database_url_var or None,
+        "session_key": settings.session_secret_source,
+        "google_sign_in": bool(settings.google_client_id),
+        "gemini": bool(settings.gemini_api_key),
+        "public_url": settings.public_url or None,
+    }
+    if deep:
+        body["gemini"] = gemini.probe()
     return body

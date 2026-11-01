@@ -13,11 +13,27 @@ const RULES: { prefix: string; roles?: string[] }[] = [
 
 interface Claims { sub: string; role: string; onboarded: boolean; verified: boolean }
 
+const clean = (value?: string) => (value ?? '').trim().replace(/^"+|"+$/g, '');
+
+async function signingKey(): Promise<string> {
+  const explicit = clean(process.env.NEXTAUTH_SECRET) || clean(process.env.SESSION_SECRET);
+  if (explicit) return explicit;
+  // Same order as DATABASE_URL_VARS in api/_lib/core/config.py (static reads so the Edge runtime sees them).
+  const dbUrl = [process.env.DATABASE_URL, process.env.DB_URL, process.env.POSTGRES_URL, process.env.DB_POSTGRES_URL,
+    process.env.DATABASE_POSTGRES_URL, process.env.NEON_DATABASE_URL, process.env.DATABASE_URL_UNPOOLED,
+    process.env.DB_URL_UNPOOLED].map(clean).find(Boolean);
+  if (dbUrl) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`volentify-session-v1|${dbUrl}`));
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  return process.env.VERCEL_ENV ? '' : DEV_SECRET;
+}
+
 async function readSession(req: NextRequest): Promise<Claims | null> {
   const token = req.cookies.get('volentify_session')?.value;
-  const secret = process.env.NEXTAUTH_SECRET || process.env.SESSION_SECRET
-    || (process.env.VERCEL_ENV ? '' : DEV_SECRET);
-  if (!token || !secret) return null;
+  if (!token) return null;
+  const secret = await signingKey();
+  if (!secret) return null;
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), { algorithms: ['HS256'] });
     return payload.typ === 'session' ? (payload as unknown as Claims) : null;

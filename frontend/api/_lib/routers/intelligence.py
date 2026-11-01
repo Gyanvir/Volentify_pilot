@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Response
 
-from ..core import db
+from ..core import db, research
 from ..engines import briefing, cyclone, dedup, dispatch, intel, surge, triage
 from ..schemas import (
     BriefingRequest, DeduplicatedEvent, DispatchRequest, DispatchResult, MatchRequest, NearbyRequest,
@@ -18,7 +18,10 @@ router = APIRouter(prefix="/api", tags=["intelligence"])
 
 @router.post("/predict", response_model=PredictionResponse)
 def predict(body: PredictionRequest):
-    return surge.predict(body.model_dump())
+    inputs = body.model_dump()
+    result = surge.predict(inputs)
+    research.record("forecast", str(result.get("model", "surge")), {"input": inputs, "output": result})
+    return result
 
 
 @router.get("/ml/models")
@@ -66,7 +69,16 @@ def dispatch_batch(response: Response, body: DispatchRequest | None = None):
 
     (tasks, volunteers), source = db.read(load)
     tag(response, source)
-    return dispatch.dispatch_batch(tasks, volunteers)
+    result = dispatch.dispatch_batch(tasks, volunteers)
+    out = result if isinstance(result, dict) else result.model_dump()
+    research.record("dispatch_run", f"sperling/{source}", {
+        "tiers": out.get("tiers"), "completeness": out.get("completeness"), "latency_ms": out.get("latency_ms"),
+        "tasks_evaluated": out.get("tasks_evaluated"), "volunteers_evaluated": out.get("volunteers_evaluated"),
+        "scarcity": out.get("scarcity"), "bottlenecks": len(out.get("bottlenecks") or []),
+        "assignment_scores": [a.get("score") if isinstance(a, dict) else getattr(a, "score", None)
+                              for a in out.get("assignments") or []],
+    })
+    return result
 
 
 @router.post("/infrastructure/nearby")

@@ -76,7 +76,8 @@ development, NGO and command roles are verified automatically so every console c
 
 Any PostgreSQL 15+ works — Neon (from Vercel → Storage), Supabase, or local Postgres.
 
-1. Set `DATABASE_URL` (the pooled connection string).
+1. Set `DATABASE_URL` (the pooled connection string). `DB_URL`, `POSTGRES_URL` and `DB_POSTGRES_URL` are read
+   too, so Vercel's Neon integration works whatever prefix it was connected with.
 2. That's it: on first connection to an empty database the API creates the schema
    (`api/_lib/data/schema.sql`, equivalent to `prisma/schema.prisma`) and loads the starting dataset.
    `npm run db:seed` does the same from your machine; `npm run db:push` is the Prisma route.
@@ -91,9 +92,13 @@ Google's signing keys, audience, issuer and a one-time nonce.
 ## Deploying to Vercel
 
 1. Import the repository and set **Root Directory** to `frontend`.
-2. Storage → Create Database → Neon (Postgres), connected to the project. This adds `DATABASE_URL`.
+2. Storage → Create Database → Neon (Postgres), connected to the project. This adds `DATABASE_URL`
+   (or `DB_URL`, depending on the prefix chosen).
 3. Add `NEXTAUTH_SECRET` (any long random string), `NEXTAUTH_URL` (your site address) and
-   `VOLENTIFY_ADMIN_EMAILS`. Optional: `GOOGLE_CLIENT_ID`, `GEMINI_API_KEY`.
+   `VOLENTIFY_ADMIN_EMAILS`. Optional: `GOOGLE_CLIENT_ID`, `GEMINI_API_KEY` (an AI Studio key `AIza…` or a
+   Vertex AI express key `AQ.…` — both are supported).
+   `/api/health` reports which variables the deployment picked up, and `/api/health?deep=1` makes a live Gemini
+   call to confirm the key works.
 4. Deploy. Next.js pages and the Python API (`api/index.py`, routed by `vercel.json`) deploy together,
    and the first API request initialises the database.
 
@@ -124,9 +129,9 @@ Google's signing keys, audience, issuer and a one-time nonce.
 - Node IDs are random UUIDs, never hardware addresses; locations can be masked by ±500 m.
 
 The **Volentify Mesh APK** workflow builds and tests the app and publishes `volentify-mesh.apk`
-as a GitHub release. Set `NEXT_PUBLIC_MESH_APK_URL` to
-`https://github.com/<owner>/<repo>/releases/latest/download/volentify-mesh.apk` and the website
-shows a download link. To build locally, open `mesh-android/` in Android Studio.
+as a GitHub release. The website's `/mesh` page offers it for download from the site's own domain
+(`/download/android` streams the latest release with the Android package MIME type). To build locally, open
+`mesh-android/` in Android Studio.
 
 ## ML pipeline
 
@@ -137,6 +142,26 @@ python -m volentify_ml.train --download     # fetch IBTrACS, evaluate, export to
 ```
 
 The **Train cyclone models** workflow runs this weekly and commits the refreshed models.
+
+## Research archive
+
+Live observations and model outputs are archived to the `research_log` table (created automatically) so results
+can be reproduced and analysed:
+
+| Kind | What is recorded | When |
+| :-- | :-- | :-- |
+| `cap_alert` | Each NDMA SACHET CAP alert (title, text, severity, issuer, time), stored once | Every feed pull, plus every 3 h |
+| `forecast` | Input and full output of every `/api/predict` call, with model version | On every forecast |
+| `dispatch_run` | Tier counts, completeness, latency, scarcity weights, score distribution | On every dispatch cycle |
+| `model_version` | The model card (data span, features, held-out metrics) of each trained model | Once per version |
+| `platform_snapshot` | Active incidents, task and volunteer status counts, mesh node and hop counts | Every 3 h |
+
+No personal data is archived (no report text, names, phone numbers or exact volunteer locations).
+The **Collect research archive** workflow triggers `/api/research/collect` every 3 hours.
+`GET /api/research/summary` shows what has been collected; `GET /api/research/export?kind=…&format=csv|jsonl`
+downloads it (incident administrators and researchers).
+
+Model training history is also kept in git: each weekly retrain commits the refreshed model and model card.
 
 ## Tests
 

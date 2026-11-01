@@ -1,0 +1,21 @@
+name: Collect research archive
+
+# Every 3 hours: the live site pulls the NDMA SACHET CAP feed and archives a platform snapshot into the
+# research_log table, building a continuous, timestamped dataset for analysis (see README → Research archive).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 */3 * * *"
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger collection
+        env:
+          SITE: ${{ vars.VOLENTIFY_URL || 'https://volentify.vercel.app' }}
+        run: |
+          curl -fsS --retry 3 --retry-delay 20 -X POST "$SITE/api/research/collect" | tee result.json
+          echo
+          python3 -c "import json;d=json.load(open('result.json'));print('::notice::CAP feed',d['cap_feed_mode'],'- snapshot from',d['snapshot_source'])"

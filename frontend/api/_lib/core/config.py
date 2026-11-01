@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from dataclasses import dataclass
@@ -31,7 +32,9 @@ def _env(name: str, default: str = "") -> str:
 @dataclass(frozen=True)
 class Settings:
     database_url: str
+    database_url_var: str
     session_secret: str
+    session_secret_source: str
     google_client_id: str
     gemini_api_key: str
     gemini_model: str
@@ -53,17 +56,47 @@ class Settings:
         return self.environment == "development"
 
 
+# Connection-string variables in the order they are tried. Vercel's Neon integration names them after the
+# prefix chosen when the database is connected (DATABASE_URL by default, DB_URL for the prefix "DB", …).
+DATABASE_URL_VARS = ("DATABASE_URL", "DB_URL", "POSTGRES_URL", "DB_POSTGRES_URL", "DATABASE_POSTGRES_URL",
+                     "NEON_DATABASE_URL", "DATABASE_URL_UNPOOLED", "DB_URL_UNPOOLED")
+DEV_SECRET = "volentify-local-development-secret-change-me"
+
+
+def database_url_and_source() -> tuple[str, str]:
+    for name in DATABASE_URL_VARS:
+        value = _env(name)
+        if value:
+            return value, name
+    return "", ""
+
+
+def session_secret_and_source(environment: str, database_url: str) -> tuple[str, str]:
+    """The key that signs sessions, mesh tokens and muster passes.
+
+    NEXTAUTH_SECRET is preferred. Without it, a key is derived from the database connection string (itself a
+    secret) so a deployment never breaks because the variable was removed; middleware.ts derives the same key.
+    """
+    explicit = _env("NEXTAUTH_SECRET") or _env("SESSION_SECRET")
+    if explicit:
+        return explicit, "NEXTAUTH_SECRET"
+    if database_url:
+        return hashlib.sha256(f"volentify-session-v1|{database_url}".encode()).hexdigest(), "derived"
+    if environment == "development":
+        return DEV_SECRET, "development"
+    return "", "missing"
+
+
 @lru_cache
 def get_settings() -> Settings:
     environment = _env("VERCEL_ENV") or _env("VOLENTIFY_ENV", "development")
-    secret = _env("NEXTAUTH_SECRET") or _env("SESSION_SECRET")
-    if not secret:
-        if environment != "development":
-            raise RuntimeError("NEXTAUTH_SECRET must be set outside local development")
-        secret = "volentify-local-development-secret-change-me"
+    database_url, database_url_var = database_url_and_source()
+    secret, secret_source = session_secret_and_source(environment, database_url)
     return Settings(
-        database_url=_env("DATABASE_URL"),
+        database_url=database_url,
+        database_url_var=database_url_var,
         session_secret=secret,
+        session_secret_source=secret_source,
         google_client_id=_env("GOOGLE_CLIENT_ID") or _env("NEXT_PUBLIC_GOOGLE_CLIENT_ID"),
         gemini_api_key=_env("GEMINI_API_KEY"),
         gemini_model=_env("GEMINI_MODEL", "gemini-2.5-flash"),

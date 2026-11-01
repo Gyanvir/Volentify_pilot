@@ -20,7 +20,9 @@ from api.index import app  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def clean_state(monkeypatch):
-    monkeypatch.delenv("DATABASE_URL", raising=False)
+    from api._lib.core.config import DATABASE_URL_VARS
+    for name in DATABASE_URL_VARS:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("VOLENTIFY_ENV", "test")
     monkeypatch.setenv("NEXTAUTH_SECRET", "test-secret-that-is-at-least-32-bytes-long")
     monkeypatch.setenv("VOLENTIFY_ADMIN_EMAILS", "chief@ndrf.gov.in")
@@ -298,3 +300,52 @@ def test_validation_errors_are_readable(client):
     r = client.post("/api/predict", json={"lat": 999, "lng": 0, "wind_speed": 1, "rainfall_mm": 1})
     assert r.status_code == 422 and r.json()["detail"].startswith("lat:")
     json.dumps(r.json())
+
+
+def test_database_url_aliases_and_derived_session_key(client, monkeypatch):
+    """Vercel's Neon integration may name the variable DB_URL; sessions must survive a missing NEXTAUTH_SECRET."""
+    monkeypatch.setenv("VOLENTIFY_ENV", "production")
+    monkeypatch.delenv("NEXTAUTH_SECRET", raising=False)
+    monkeypatch.setenv("DB_URL", "postgresql://u:p@127.0.0.1:1/neondb?sslmode=require")
+    get_settings.cache_clear()
+    settings = get_settings()
+    assert settings.database_url_var == "DB_URL"
+    assert settings.session_secret_source == "derived" and len(settings.session_secret) == 64
+    body = client.get("/api/health").json()
+    assert body["configuration"]["database_variable"] == "DB_URL"
+    assert body["configuration"]["session_key"] == "derived"
+    assert "p@" not in str(body)
+
+
+def test_missing_secret_breaks_only_sign_in(client, monkeypatch):
+    monkeypatch.setenv("VOLENTIFY_ENV", "production")
+    monkeypatch.delenv("NEXTAUTH_SECRET", raising=False)
+    get_settings.cache_clear()
+    assert client.get("/api/health").status_code == 200
+    assert client.get("/api/disasters").status_code == 200
+    r = client.post("/api/auth/register", json={"name": "A B", "email": "a@b.co", "password": "longpassword1"})
+    assert r.status_code == 503
+
+
+def test_research_archive_records_forecasts_and_snapshots(client, monkeypatch):
+    from api._lib.core import research
+    from api._lib.engines import intel
+    from api._lib.routers import research as research_router
+    research._memory.clear()
+    research_router._collect_limiter._hits.clear()
+
+    async def fake_feed(limit=40):
+        items = [{"title": "Heavy rain warning", "description": "Orange alert", "link": "x", "source": "IMD",
+                  "severity": "HIGH", "published_at": "2026-11-01T00:00:00+00:00"}]
+        research.record_many("cap_alert", "NDMA SACHET", [(research.fingerprint("a"), i) for i in items])
+        return {"source": "NDMA SACHET CAP feed", "mode": "LIVE", "items": items}
+
+    monkeypatch.setattr(intel, "sachet_bulletins", fake_feed)
+    client.post("/api/predict", json={"lat": 19.8, "lng": 85.8, "wind_speed": 150, "rainfall_mm": 200})
+    r = client.post("/api/research/collect")
+    assert r.status_code == 200 and r.json()["cap_feed_mode"] == "LIVE"
+    client.post("/api/research/collect")  # same alert again is not archived twice
+    kinds = client.get("/api/research/summary").json()["kinds"]
+    assert kinds["forecast"]["count"] == 1 and kinds["cap_alert"]["count"] == 1
+    assert kinds["platform_snapshot"]["count"] == 2
+    assert client.get("/api/research/export").status_code == 401

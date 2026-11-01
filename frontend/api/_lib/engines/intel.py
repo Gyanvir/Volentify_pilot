@@ -105,6 +105,9 @@ async def sachet_bulletins(limit: int = 40) -> dict[str, Any]:
             if len(items) >= limit:
                 break
         if items:
+            from ..core import research
+            research.record_many("cap_alert", "NDMA SACHET", [
+                (research.fingerprint(i["title"], i["published_at"], i["link"]), i) for i in items])
             return {"source": "NDMA SACHET CAP feed", "mode": "LIVE", "items": items}
     except (httpx.HTTPError, ET.ParseError):
         pass
