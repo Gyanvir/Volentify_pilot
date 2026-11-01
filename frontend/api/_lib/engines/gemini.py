@@ -18,7 +18,7 @@ from ..core.config import get_settings
 
 AI_STUDIO = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 VERTEX_EXPRESS = "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent"
-TIMEOUT_S = 8.0
+TIMEOUT_S = httpx.Timeout(22.0, connect=5.0)  # newer Flash models think before answering; API limit is 30 s
 AI_STUDIO_MODELS = "https://generativelanguage.googleapis.com/v1beta/models"
 _state: dict[str, Optional[str]] = {"last_error": None, "endpoint": None, "model": None}
 _SKIP = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "preview", "vision")
